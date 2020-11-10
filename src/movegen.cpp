@@ -1,0 +1,255 @@
+// 
+// MoveGen.cpp
+// by Jonathan Kreuzer
+//
+// Contains functions the use the bitboards in a Board to generate a list of valid moves.
+// In checkers if there are any jumps you have to jump, so will try to find jumps first.
+//
+#include <cstdint>
+#include <assert.h>
+
+#include "board.h"
+#include "moveGen.h"
+
+// Create lookup tables used for finding the lowest 1 bit, highest 1 bit, and the number of 1 bits in a 16-bit integer
+// Newer processors will use hardward instructions instead of these tables.
+unsigned char aBitCount[65536];
+unsigned char aLowBit[65536];
+unsigned char aHighBit[65536];
+
+void InitBitTables()
+{
+	for (int Moves = 0; Moves < 65536; Moves++) 
+	{
+		int nBits = 0;
+		int nLow = 255, nHigh = 255;
+		for (int i = 0; i < 16; i++) {
+			if ( Moves & S[i] )
+			{
+				nBits++;
+				if (nLow == 255) nLow = i;
+				nHigh = i;
+			}
+		}
+		aLowBit[ Moves ] = nLow;
+		aHighBit[ Moves ] = nHigh;
+		aBitCount[ Moves ] = nBits;
+	}
+}
+
+// Return a bitboard of white pieces that have a possible non-jumping move. 
+// We start with the empty sq bitboard, shift for each possible move directions
+// and or all the directions together to get the movable pieces bitboard.
+uint32_t SCheckerBitboards::GetMovers( const eColor color ) const
+{
+	if (color == WHITE)
+	{
+		uint32_t Moves = (empty << 4);
+		const uint32_t WK = P[WHITE] & K;		  // Kings
+		Moves |= ((empty & MASK_L3) << 3);
+		Moves |= ((empty & MASK_L5) << 5);
+		Moves &= P[WHITE];
+		if (WK) {
+			Moves |= (empty >> 4) & WK;
+			Moves |= ((empty & MASK_R3) >> 3) & WK;
+			Moves |= ((empty & MASK_R5) >> 5) & WK;
+		}
+		return Moves;
+	}
+	if (color == BLACK)
+	{
+		uint32_t Moves = (empty >> 4);
+		const uint32_t BK = P[BLACK] & K;
+		Moves |= ((empty & MASK_R3) >> 3);
+		Moves |= ((empty & MASK_R5) >> 5);
+		Moves &= P[BLACK];
+		if (BK) {
+			Moves |= (empty << 4) & BK;
+			Moves |= ((empty & MASK_L3) << 3) & BK;
+			Moves |= ((empty & MASK_L5) << 5) & BK;
+		}
+		return Moves;
+	}
+	assert(false);
+	return 0;
+}
+
+// Return a list of white pieces that have a possible jump move
+// To do this we start with a bitboard of empty squares and shift it to check each direction for a black piece, 
+// then shift the passing bits to find the white pieces with a jump. Moveable pieces from the different direction checks are or'd together.
+uint32_t SCheckerBitboards::GetJumpers( const eColor c ) const
+{
+	uint32_t Movers = 0;
+	if (c == WHITE)
+	{
+		const uint32_t WK = P[WHITE] & K; // WK = White Kings bitboard
+		uint32_t Temp = (empty << 4) & P[BLACK];
+		Movers |= (((Temp & MASK_L3) << 3) | ((Temp & MASK_L5) << 5));
+		Temp = (((empty & MASK_L3) << 3) | ((empty & MASK_L5) << 5)) & P[BLACK];
+		Movers |= (Temp << 4);
+		Movers &= P[WHITE];
+		if (WK) {
+			Temp = (empty >> 4) & P[BLACK];
+			Movers |= (((Temp & MASK_R3) >> 3) | ((Temp & MASK_R5) >> 5)) & WK;
+			Temp = (((empty & MASK_R3) >> 3) | ((empty & MASK_R5) >> 5)) & P[BLACK];
+			Movers |= (Temp >> 4) & WK;
+		}
+	}
+	else // BLACK
+	{
+		const uint32_t BK = P[BLACK] & K;
+		uint32_t Temp = (empty >> 4) & P[WHITE];
+		Movers |= (((Temp & MASK_R3) >> 3) | ((Temp & MASK_R5) >> 5));
+		Temp = (((empty & MASK_R3) >> 3) | ((empty & MASK_R5) >> 5)) & P[WHITE];
+		Movers |= (Temp >> 4);
+		Movers &= P[BLACK];
+		if (BK) {
+			Temp = (empty << 4) & P[WHITE];
+			Movers |= (((Temp & MASK_L3) << 3) | ((Temp & MASK_L5) << 5)) & BK;
+			Temp = (((empty & MASK_L3) << 3) | ((empty & MASK_L5) << 5)) & P[WHITE];
+			Movers |= (Temp << 4) & BK;
+		}
+	}
+	return Movers;
+}
+
+// returns bitboard of destination sqs for checkers of specified color
+int SCheckerBitboards::CheckerMoves(const eColor c, uint32_t checkers) const
+{
+	if ( c == BLACK ) 
+		return (empty & (checkers << 4)) | ((((checkers & MASK_L3) << 3) | ((checkers & MASK_L5) << 5)) & empty);
+	else 
+		return (empty & (checkers >> 4)) | ((((checkers & MASK_R3) >> 3) | ((checkers & MASK_R5) >> 5)) & empty);
+}
+
+// -------------------------------------------------
+// Find the Moves available on board, and store them in Movelist
+// -------------------------------------------------
+void CMoveList::FindMoves(const eColor color, SCheckerBitboards& Bb)
+{
+	uint32_t Jumpers = Bb.GetJumpers(color);
+
+	if (Jumpers) // If there are any jump moves possible
+		FindJumps(color, Bb, Jumpers); // We fill this movelist with the jump moves
+	else
+		FindNonJumps(color, Bb, Bb.GetMovers(color)); // Otherwise we fill the movelist with non-jump moves
+}
+
+// -------------------------------------------------
+// These two functions only add non-jumps
+// -------------------------------------------------
+void CMoveList::FindNonJumps( const eColor color, const SCheckerBitboards& Bb, uint32_t Movers )
+{
+	Clear( );
+
+	while (Movers) 
+	{
+		uint32_t sq = (color == WHITE) ? PopLowSq(Movers) : PopHighSq(Movers);  // Pop a piece from the list of of movable pieces
+
+		AddNormalMove(Bb, sq, ForwardLeft[color]); // Check the 2 forward directions and add valid moves
+		AddNormalMove(Bb, sq, ForwardRight[color]);
+
+		if (SqBit(sq) & Bb.K) { // For Kings only
+			AddNormalMove(Bb, sq, BackwardLeft[color]); // Check the 2 backward directions and add valid moves
+			AddNormalMove(Bb, sq, BackwardRight[color]);
+		}
+	}
+}
+
+// -------------------------------------------------
+// These two functions only add jumps
+// -------------------------------------------------
+void CMoveList::FindJumps(const eColor color, SCheckerBitboards& B, uint32_t Movers)
+{
+	Clear();
+	while (Movers)
+	{
+		uint32_t sq = (color == WHITE ) ? PopLowSq(Movers) : PopHighSq(Movers);  // Pop a piece from the list of of movable pieces
+
+		uint32_t oldEmpty = B.empty;
+		B.empty |= SqBit(sq); // Temporarly mark the piece square as empty to allow cyclic jump moves
+
+		CheckJumpDir(color, B, sq, ForwardLeft[color]); // Check the two forward directions
+		CheckJumpDir(color, B, sq, ForwardRight[color]);
+		if (B.K & SqBit(sq)) // For Kings only
+		{
+			CheckJumpDir(color, B, sq, BackwardRight[color]); // Check the two backward directions
+			CheckJumpDir(color, B, sq, BackwardLeft[color]);
+		}
+		B.empty = oldEmpty;
+	}
+	numMoves = numJumps;
+}
+
+// Check for a jump
+void CMoveList::CheckJumpDir( const eColor color, SCheckerBitboards&B, int square, const int DIR_INDEX )
+{
+	int jumpSquare = nextSq[square+DIR_INDEX];
+	if ( S[jumpSquare] & B.P[Opp(color)]) // If there is an opponent's piece in this direction
+	{
+		int	dstSq = nextSq[jumpSquare+DIR_INDEX];
+		if ( B.empty & S[dstSq] ) // And the next square in this direction is empty
+		{
+			// Then a jump is possible, call FindSqJumps to detect double/triple/etc. jumps
+			StartJumpMove( square, dstSq );
+			FindSqJumps( color, B, dstSq, 0, jumpSquare, S[square]&B.K );
+		} 
+	}
+}
+
+// -------------
+//  If a jump move was possible, we must make the jump then check to see if the same piece can jump again.
+//  There might be multiple paths a piece can take on a double jump, these functions store each possible path as a move.
+// -------------
+int inline CMoveList::AddSqDir(const eColor color, SCheckerBitboards& B, int square, const bool isKing, int pathIdx, const int DIR_INDEX )
+{
+	int jumpSquare = nextSq[square+DIR_INDEX];
+	if ( S[jumpSquare] & B.P[Opp(color)])
+	{
+		int	dstSq = nextSq[jumpSquare+DIR_INDEX];
+		if ( B.empty & S[dstSq] )
+		{
+			// jump is possible in this direction, see if the piece can jump more times
+			m_JumpMove.SetJumpDir( pathIdx, (DIR_INDEX>>5) );
+			FindSqJumps( color, B, dstSq, pathIdx +1, jumpSquare, isKing );
+			return 1;
+		}
+	}
+	return 0;
+}
+
+void CMoveList::FindSqJumps( const eColor color, SCheckerBitboards& C, int square, int pathNum, int jumpSquare, const bool isKing )
+{
+	// Remove the jumped piece (until the end of this function), so we can't jump it again
+	int oldPieces = C.P[Opp(color)];
+	C.P[Opp(color)] ^= S[jumpSquare];
+
+	// Now see if a piece on this square has more jumps
+	int numMoves = AddSqDir(color, C, square, isKing, pathNum, ForwardRight[color] )
+				 + AddSqDir(color, C, square, isKing, pathNum, ForwardLeft[color] );
+
+	if (isKing)
+	{
+		// If this piece is a king, it can also jump backwards	
+		numMoves += AddSqDir(color, C, square, isKing, pathNum, BackwardLeft[color] )
+				  + AddSqDir(color, C, square, isKing, pathNum, BackwardRight[color] );
+	}
+
+	// if this is a leaf store the move
+	if (numMoves == 0) 
+		AddJump( m_JumpMove, pathNum ); 
+
+	// Put back the jumped piece
+	C.P[Opp(color)] = oldPieces;
+}
+
+// For PDN support
+int SMove::GetFinalDst(const SMove& Move)
+{
+	int sq = Move.Dst();
+	for (int i = 0; i < Move.JumpLen() - 1; i++)
+	{
+		sq += JumpAddDir[Move.Dir(i)];
+	}
+	return sq;
+}

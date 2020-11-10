@@ -1,0 +1,153 @@
+//
+// Transcript.cpp
+// by Jonathan Kreuzer
+//
+// Stores the everything needed to replay the game (start board and moves)
+// It supports converting to or fram a pdn string.
+//
+
+#include <string.h>
+#include <stdio.h>
+#include <sstream> 
+
+#include "defines.h"
+#include "transcript.h"
+
+Transcript g_Transcript;
+
+// Convert transcript to PDN string in reference param sPDN
+std::string Transcript::ToPDN()
+{
+	std::stringstream text;
+	text << "[Event \"" << g_VersionName << " game\"]\015\012";
+
+	char sFEN[512];
+	startBoard.ToFen(sFEN);
+	if (strcmp(sFEN, "B:W24,23,22,21,28,27,26,25,32,31,30,29:B4,3,2,1,8,7,6,5,12,11,10,9.") != 0)
+	{
+		text << "[SetUp \"1\"]\015\012";
+		text << "[FEN \"" << sFEN << "\"]\015\012";
+	}
+
+	for (int i = 0; i < numMoves && moves[i] != NO_MOVE; i++ )
+	{
+		if ((i % 2) == 0) text << ((i/2) + 1) << ". ";
+		text << GetMoveString(moves[i]) << " ";
+		if (((i+1) % 12) == 0) text << "\015\012";
+	}
+	text << "*";
+
+	return text.str();
+}
+
+void ReadResult( const char buffer[], float* gameResult)
+{
+	if (memcmp(buffer, "0-1", 3) == 0) {
+		if (gameResult) *gameResult = 0.0f;
+	}
+	if (memcmp(buffer, "1-0", 3) == 0) {
+		if (gameResult) *gameResult = 1.0f;
+	}
+	if (memcmp(buffer, "1/2-1/2", 7) == 0) {
+		if (gameResult) *gameResult = 0.5f;
+	}
+}
+
+// Covert param PDN string to a transcript
+int Transcript::FromPDN(const char* sPDN, float* gameResult )
+{
+	int i = 0;
+	int nEnd = (int)strlen(sPDN);
+	int src = 0, dst = 0;
+	char sFEN[512];
+	SBoard tempBoard;
+
+	Init(SBoard::StartPosition());
+	tempBoard = startBoard;
+
+	while (i < nEnd)
+	{
+		// If we read a result, we're done with this game
+		if (sPDN[i] == '*') {
+			break;
+		}
+
+		// If this has a start position, read it
+		if (memcmp(&sPDN[i], "[FEN \"", 6) == 0)
+		{
+			i += 6;
+			int x = 0;
+			while (sPDN[i] != '"' && i < nEnd) sFEN[x++] = sPDN[i++];
+			sFEN[x++] = 0;
+
+			startBoard.FromFen(sFEN);
+			tempBoard = startBoard;
+		}
+
+		// Skip brackets
+		if (sPDN[i] == '[') 
+		{
+			// If this is a result, store the result
+			if (memcmp(&sPDN[i], "[Result ", 8) == 0)
+			{
+				ReadResult(&sPDN[i + 9], gameResult);
+			}
+			while (sPDN[i] != ']' && i < nEnd) i++;
+		}
+
+		// Skip comments
+		if (sPDN[i] == '{') while (sPDN[i] != '}' && i < nEnd) i++;
+
+		// Read digits and convert to moves
+		if (sPDN[i] >= '0' && sPDN[i] <= '9' && sPDN[i + 1] == '.') i++;
+		if (sPDN[i] >= '0' && sPDN[i] <= '9')
+		{
+			int sq = sPDN[i] - '0';
+			i++;
+			if (sPDN[i] >= '0' && sPDN[i] <= '9') sq = sq * 10 + sPDN[i] - '0';
+			src = FlipSqX(sq - 1);
+		}
+		if ((sPDN[i] == '-' || sPDN[i] == 'x')
+			&& sPDN[i + 1] >= '0' && sPDN[i + 1] <= '9')
+		{
+			i++;
+			int sq = sPDN[i] - '0';
+			i++;
+			if (sPDN[i] >= '0' && sPDN[i] <= '9') sq = sq * 10 + sPDN[i] - '0';
+			dst = FlipSqX(sq - 1);
+
+			MakeMovePDN(src, dst, tempBoard);
+		}
+		i++;
+	}
+	return 1;
+}
+
+// Make a single move on this transcript from src to dst
+int Transcript::MakeMovePDN(int src, int dst, SBoard& board)
+{
+	CMoveList Moves;
+	Moves.FindMoves(board.SideToMove, board.Bitboards);
+
+	for (int i = 0; i < Moves.numMoves; i++)
+	{
+		SMove move = Moves.Moves[i];
+		if (move.Src() == src
+			&& (move.Dst() == dst || SMove::GetFinalDst(move) == dst))
+		{
+			board.DoMove(move);
+			AddMove(move);
+
+			return 1;
+		}
+	}
+	return 0;
+}
+
+std::string Transcript::GetMoveString(const SMove& move)
+{
+	int src = StandardSquare(move.Src());
+	char cap = (move.JumpLen() > 0) ? 'x' : '-';
+	int dst = StandardSquare(SMove::GetFinalDst(move));
+	return std::to_string(src) + cap + std::to_string(dst);
+}
