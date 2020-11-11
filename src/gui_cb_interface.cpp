@@ -173,6 +173,7 @@ int WINAPI getmove
 
 int WINAPI enginecommand(char str[256], char reply[1024])
 {
+	const int REPLY_MAX = 1024;
 	char command[256], param1[256], param2[256];
 	char* stopstring;
 
@@ -182,12 +183,12 @@ int WINAPI enginecommand(char str[256], char reply[1024])
 	sscanf(str, "%s %s %s", command, param1, param2);
 
 	if (strcmp(command, "name") == 0) {
-		sprintf(reply, g_VersionName);
+		snprintf(reply, REPLY_MAX, g_VersionName);
 		return 1;
 	}
 
 	if (strcmp(command, "about") == 0) {
-		sprintf(reply, "%s\nby Jonathan Kreuzer\n\n%s ", g_VersionName, engine.GetInfoString());
+		snprintf(reply, REPLY_MAX, "%s\nby Jonathan Kreuzer\n\n%s ", g_VersionName, engine.GetInfoString().c_str() );
 		return 1;
 	}
 
@@ -202,7 +203,7 @@ int WINAPI enginecommand(char str[256], char reply[1024])
 			numMBs = ClampInt(numMBs, 1, 4096);
 			while (!engine.TTable.SetSizeMB(numMBs)) {
 				numMBs /= 2;
-				sprintf(reply, "allocation failed, downsizing to %dmb", numMBs);
+				snprintf(reply, REPLY_MAX, "allocation failed, downsizing to %dmb", numMBs);
 				engine.TTable.SetSizeMB(numMBs);
 			}
 
@@ -232,12 +233,12 @@ int WINAPI enginecommand(char str[256], char reply[1024])
 				checkerBoard.enable_wld = val;
 				save_enable_wld(checkerBoard.enable_wld);
 				if (!engine.dbInfo.loaded && checkerBoard.enable_wld) {
-					sprintf(reply, "Initializing endgame db...");
+					snprintf(reply, REPLY_MAX, "Initializing endgame db...");
 					InitializeEdsDatabases(engine.dbInfo);
 				}
 			}
 
-			sprintf(reply, "enable_wld set to %d", checkerBoard.enable_wld);
+			snprintf(reply, REPLY_MAX, "enable_wld set to %d", checkerBoard.enable_wld);
 			return(1);
 		}
 
@@ -248,7 +249,7 @@ int WINAPI enginecommand(char str[256], char reply[1024])
 				save_book_setting(checkerBoard.useOpeningBook);
 			}
 
-			sprintf(reply, "book set to %d", checkerBoard.useOpeningBook);
+			snprintf(reply, REPLY_MAX, "book set to %d", checkerBoard.useOpeningBook);
 			return(1);
 		}
 	}
@@ -256,35 +257,35 @@ int WINAPI enginecommand(char str[256], char reply[1024])
 	if (strcmp(command, "get") == 0) {
 		if (strcmp(param1, "hashsize") == 0) {
 			get_hashsize(&engine.TTable.sizeMb);
-			sprintf(reply, "%d", engine.TTable.sizeMb);
+			snprintf(reply, REPLY_MAX, "%d", engine.TTable.sizeMb);
 			return 1;
 		}
 
 		if (strcmp(param1, "protocolversion") == 0) {
-			sprintf(reply, "2");
+			snprintf(reply, REPLY_MAX, "2");
 			return 1;
 		}
 
 		if (strcmp(param1, "gametype") == 0) {
-			sprintf(reply, "%d", GT_ENGLISH);
+			snprintf(reply, REPLY_MAX, "%d", GT_ENGLISH);
 			return 1;
 		}
 
 		if (strcmp(param1, "dbpath") == 0) {
 			get_dbpath(checkerBoard.db_path, sizeof(checkerBoard.db_path));
-			sprintf(reply, checkerBoard.db_path);
+			snprintf(reply, REPLY_MAX, checkerBoard.db_path);
 			return(1);
 		}
 
 		if (strcmp(param1, "enable_wld") == 0) {
 			get_enable_wld(&checkerBoard.enable_wld);
-			sprintf(reply, "%d", checkerBoard.enable_wld);
+			snprintf(reply, REPLY_MAX, "%d", checkerBoard.enable_wld);
 			return(1);
 		}
 
 		if (strcmp(param1, "book") == 0) {
 			get_book_setting(&checkerBoard.useOpeningBook);
-			sprintf(reply, "%d", checkerBoard.useOpeningBook);
+			snprintf(reply, REPLY_MAX, "%d", checkerBoard.useOpeningBook);
 			return(1);
 		}
 	}

@@ -138,33 +138,31 @@ void SEngine::NewGame( const SBoard& startBoard )
 	historyTable.Clear();
 }
 
-const char* SEngine::GetInfoString()
+std::string SEngine::GetInfoString()
 {
 	// Endgame Database
-	static char displayString[1024];
+	std::string displayStr;
 	if (dbInfo.loaded == false)
 	{
-		sprintf(displayString, "No Database Loaded\n");
+		displayStr = "No Database Loaded\n";
 	} else {
-		sprintf(displayString,
-			"Database : %d-man %s\n",
-			dbInfo.numPieces,
-			dbInfo.type == dbType::WIN_LOSS_DRAW ? "Win/Loss/Draw" : "Perfect Play");
+		displayStr = "Database : " + std::to_string(dbInfo.numPieces) + "-man ",
+		displayStr += dbInfo.type == dbType::WIN_LOSS_DRAW ? "Win/Loss/Draw\n" : "Perfect Play\n";
 	}
 
 	// Opening Book
 	if (openingBook) {
-		sprintf(displayString + strlen(displayString), "Opening Book : %d positions\n", openingBook->m_nPositions);
+		displayStr += "Opening Book : " + std::to_string(openingBook->m_nPositions) + " positions\n";
 	} else {
-		sprintf(displayString + strlen(displayString), "Opening Book : not loaded.\n");
+		displayStr += "Opening Book : not loaded.\n";
 	}
 
 	// Neural Nets
 	int numLoadedNets = 0;
 	for (auto net : evalNets) { numLoadedNets += (net->isLoaded) ? 1 : 0; }
-	sprintf(displayString + strlen(displayString), "Neural Nets : %d\n", numLoadedNets );
+	displayStr += "Neural Nets : " + std::to_string(numLoadedNets) + "\n";
 
-	return displayString;
+	return displayStr;
 }
 
 // TODO : convert to std::thread
@@ -182,10 +180,10 @@ DWORD WINAPI ThinkingThread(void* /* param */)
 		WaitForSingleObject(hAction, INFINITE);
 		ResetEvent(hEngineReady);
 
-		SetComputerColor((eColor)engine.board.SideToMove);
+		winGUI.SetComputerColor((eColor)engine.board.SideToMove);
 		BestMoveInfo moveInfo = ComputerMove(engine.board);
-		DoGameMove(moveInfo.move);
-		ThinkingMenuActive(false);
+		winGUI.DoGameMove(moveInfo.move);
+		winGUI.ThinkingMenuActive(false);
 		engine.bThinking = false;
 	}
 
@@ -244,7 +242,7 @@ void SEngine::Init(char* status_str)
 		hAction = CreateEvent(NULL, FALSE, FALSE, NULL);
 		hThread = CreateThread(NULL, 0, ThinkingThread, 0, 0, &ThreadId);	
 		if (hThread == NULL) {
-			ShowErrorPopup("Cannot Create Thread");
+			winGUI.ShowErrorPopup("Cannot Create Thread");
 		}
 	}
 }

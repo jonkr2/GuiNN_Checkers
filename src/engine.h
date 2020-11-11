@@ -28,7 +28,7 @@ struct SEngine
 	void NewGame(const SBoard& startBoard);
 	void MoveNow();
 	void StartThinking();
-	const char* GetInfoString();
+	std::string GetInfoString();
 
 	SearchLimits searchLimits;
 	COpeningBook* openingBook;

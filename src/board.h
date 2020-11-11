@@ -68,7 +68,7 @@ struct SBoard
 	int EvaluateBoard( int ahead, uint64_t& databaseNodes );
 	int FinishingEval();
 
-	void ToFen( char *sFEN );
+	std::string ToFen();
 	int FromFen( char *sFEN );
 
 	static SBoard StartPosition();

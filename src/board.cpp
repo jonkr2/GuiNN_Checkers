@@ -35,7 +35,6 @@ void SBoard::SetPiece(int sq, int piece)
 	// Clear square first
 	Bitboards.P[WHITE] &= ~S[sq];
 	Bitboards.P[BLACK] &= ~S[sq];
-	Bitboards.P[BLACK] &= ~S[sq];
 	Bitboards.K &= ~S[sq];
 
 	// Set the piece
@@ -125,28 +124,21 @@ void inline SBoard::DoSingleJump( int src, int dst, const ePieceType piece, cons
 	int jumpedSq = ((dst + src) >> 1 );
 	if ( S[jumpedSq] & MASK_ODD_ROW ) jumpedSq += 1; // correct for square number since the jumpedSq sometimes up 1 sometimes down 1 of the average
 
-	ePieceType jumpedPiece = GetPiece( jumpedSq );
-
 	// Update Piece Count
-	if ( jumpedPiece == WPIECE || jumpedPiece == WKING ) { numPieces[WHITE]--; }
-	else { numPieces[BLACK]--; }
+	numPieces[Opp(color)]--;
 
 	// Update Hash Key
+	const ePieceType jumpedPiece = GetPiece(jumpedSq);
 	HashKey ^= TranspositionTable::HashFunction[src][piece] ^ TranspositionTable::HashFunction[dst][piece];
 	HashKey	^= TranspositionTable::HashFunction[jumpedSq][jumpedPiece];
 
 	// Update the bitboards
-	uint32_t BitMove = (S[ src ] | S[ dst ]);
-	if (color == WHITE) {
-		Bitboards.P[WHITE] ^= BitMove;
-		Bitboards.P[BLACK] ^= S[jumpedSq];
-		Bitboards.K  &= ~S[jumpedSq];
-	} else {
-		Bitboards.P[BLACK] ^= BitMove;
-		Bitboards.P[WHITE] ^= S[jumpedSq];
-		Bitboards.K  &= ~S[jumpedSq];
-	}
-	Bitboards.empty = ~(Bitboards.P[WHITE] | Bitboards.P[BLACK]);
+	uint32_t BitMove = SqBit( src ) | SqBit( dst );
+
+	Bitboards.P[color] ^= BitMove;
+	Bitboards.P[Opp(color)] ^= SqBit(jumpedSq);
+	Bitboards.K  &= ~SqBit(jumpedSq);
+	Bitboards.empty ^= BitMove ^ SqBit(jumpedSq);
 	if (piece & KING) Bitboards.K ^= BitMove;
 }
 
@@ -164,7 +156,6 @@ void inline SBoard::CheckKing( const int dst, const ePieceType Piece )
 //  Execute a Move 
 //  Returns 1 if it's a non reversible move (anything but moving a king around.)
 // ---------------------
-
 int SBoard::DoMove( const SMove &Move )
 {
 	const int src = Move.Src();
@@ -203,23 +194,17 @@ int SBoard::DoMove( const SMove &Move )
 	DoSingleJump( src, dst, piece, color );
 	reversibleMoves = 0;
 
-	if ( jumpLen == 1 ) 
+	if ( jumpLen > 1 ) 
 	{
-		if (piece < KING)
-			CheckKing(dst, piece);
+		// Double jump path
+		int nextDst = dst;
+		for (int i = 0; i < jumpLen - 1; i++)
+		{
+			nextDst += JumpAddDir[Move.Dir(i)];
 
-		// not a double jump, we are done now
-		return 1;
-	}
-
-	// Double jump path
-	int nextDst = dst;
-	for (int i = 0; i < jumpLen-1; i++)
-	{
-		nextDst += JumpAddDir[ Move.Dir(i) ]; 
-
-		DoSingleJump( dst, nextDst, piece, color );
-		dst = nextDst;
+			DoSingleJump(dst, nextDst, piece, color);
+			dst = nextDst;
+		}
 	}
 
 	if (piece < KING)
@@ -248,32 +233,34 @@ int StandardSquare( int sq )
 // ------------------
 // Position Copy & Paste Functions
 // ------------------
-void SBoard::ToFen( char *sFEN )
-{
-	char buffer[80];
-	int i;
-	if (SideToMove == WHITE) strcpy( sFEN, "W:"); 
-		else strcpy( sFEN, "B:");
+std::string SBoard::ToFen()
+{	
+	std::string ret = (SideToMove == WHITE) ? "W:" : "B:";
 
-	strcat( sFEN, "W");
-	for (i = 0; i < 32; i++) {
-		if ( GetPiece( i ) == WKING) strcat(sFEN, "K");
-		if ( GetPiece( i )&WPIECE)  {
-			strcat( sFEN, _ltoa (FlipSqX(i)+1, buffer, 10) );
-			strcat( sFEN, ","); 
+	ret += "W";
+	int pc = 0;
+	for (int i = 0; i < 32; i++) {
+		if ((GetPiece(i) & WPIECE) && pc > 0) { ret += ","; }
+		if (GetPiece(i) == WKING) { ret += "K"; }
+		if (GetPiece(i) & WPIECE) {
+			ret += std::to_string(StandardSquare(i));
+			pc++;
 		}
 	}
-	if (strlen(sFEN) > 3) sFEN [ strlen(sFEN)-1 ] = NULL;
 
-	strcat( sFEN, ":B");
-	for (i = 0; i < 32; i++) {
-		if ( GetPiece( i ) == BKING) strcat(sFEN, "K");
-		if ( GetPiece( i )&BPIECE) {
-			strcat( sFEN, _ltoa (FlipSqX(i)+1, buffer, 10) );
-			strcat( sFEN, ","); 
+	ret += ":B";
+	pc = 0;
+	for (int i = 0; i < 32; i++) {
+		if ((GetPiece(i) & BPIECE) && pc > 0) { ret += ","; }
+		if (GetPiece(i) == BKING) { ret += "K"; }
+		if (GetPiece(i) & BPIECE) { 
+			ret += std::to_string(StandardSquare(i));
+			pc++;
 		}
 	}
-	sFEN[ strlen(sFEN)-1 ] = '.';
+	ret += '.';
+
+	return ret;
 }
 
 int SBoard::FromFen( char *sFEN )

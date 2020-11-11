@@ -21,8 +21,7 @@ std::string Transcript::ToPDN()
 	std::stringstream text;
 	text << "[Event \"" << g_VersionName << " game\"]\015\012";
 
-	char sFEN[512];
-	startBoard.ToFen(sFEN);
+	const char* sFEN = startBoard.ToFen().c_str();
 	if (strcmp(sFEN, "B:W24,23,22,21,28,27,26,25,32,31,30,29:B4,3,2,1,8,7,6,5,12,11,10,9.") != 0)
 	{
 		text << "[SetUp \"1\"]\015\012";
@@ -53,7 +52,7 @@ void ReadResult( const char buffer[], float* gameResult)
 	}
 }
 
-// Covert param PDN string to a transcript
+// Convert param sPDN to a transcript
 int Transcript::FromPDN(const char* sPDN, float* gameResult )
 {
 	int i = 0;

@@ -4,17 +4,56 @@
 #define NOMINMAX
 #include <windows.h>
 
-// GUI function definitions
-LRESULT CALLBACK WindowProc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam);
-INT_PTR CALLBACK InfoProc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam);
-void DrawBitmap(HDC hdc, HBITMAP bitmap, int x, int y, int nSize);
-void HighlightSquare(HDC hdc, int Square, int sqSize, unsigned long color, int border);
 void DisplayText(const char* text);
-void ShowErrorPopup(const char* text);
-void DrawBoard(const struct SBoard& board);
 void RunningDisplay(const SMove& bestmove, int bSearching);
-void ReplayGame(struct Transcript& transcript, struct SBoard& Board);
-void UpdateMenuChecks();
-void DoGameMove(SMove doMove);
-void SetComputerColor(eColor Color);
-void ThinkingMenuActive(int bOn);
+void ReplayGame(Transcript& transcript, SBoard& Board);
+
+const int NO_SQUARE = 255;
+enum eMoveResult { INVALID_MOVE = 0, VALID_MOVE = 1, DOUBLEJUMP = 2000 };
+
+// Windows specific GUI function definitions
+class WindowsGUI
+{
+public:
+	static int AnyInstance(HINSTANCE this_inst);
+	int RegisterClass(HINSTANCE this_inst);
+	static LRESULT CALLBACK WindowProc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam);
+	static INT_PTR CALLBACK InfoProc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam);
+	LRESULT ProcessMessage(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam);
+	void ProcessCommand(WORD cmd, HWND hwnd);
+	void KeyboardCommands(int key);
+
+	void DrawBitmap(HDC hdc, HBITMAP bitmap, int x, int y, int nSize);
+	void HighlightSquare(HDC hdc, int Square, int sqSize, unsigned long color, int border);
+	void ShowErrorPopup(const char* text);
+	void DrawBoard(const struct SBoard& board);
+	void UpdateMenuChecks();
+	eMoveResult SquareMove(SBoard& board, int x, int y, int xloc, int yloc, eColor Color);
+	void DoGameMove(SMove doMove);
+	void SetComputerColor(eColor Color);
+	void ThinkingMenuActive(int bOn);
+	void SetupAddPiece(int x, int y, eColor color);
+	void EndBoardSetup();
+	int GetSquare(int& x, int& y);
+	void DisplayEvaluation();
+
+	int TextFromClipboard(char* sText, int nMaxBytes);
+	int TextToClipboard(const char* sText);
+	void CopyFen();
+	void CopyPDN();
+	void PasteFen();
+	void PastePDN();
+
+	// DATA
+	bool bBoardFlip = false;
+	int nDouble = 0;
+	bool bSetupBoard = false;
+
+	int xAdd = 44, yAdd = 20, nSqSize = 64;
+	HBITMAP PieceBitmaps[32];
+	int nSelSquare = NO_SQUARE;
+
+	HWND MainWnd = nullptr;
+	HWND BottomWnd = nullptr;
+};
+extern WindowsGUI winGUI;

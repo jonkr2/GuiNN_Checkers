@@ -19,63 +19,50 @@
 #include "learning.h"
 #include "board.h"
 
-const int NO_SQUARE = 255;
-
-enum eMoveResult { INVALID_MOVE = 0, VALID_MOVE = 1, DOUBLEJUMP = 2000 };
-
-// GUI Data - todo : cleanup
-bool BoardFlip = false;
-int g_xAdd = 44, g_yAdd = 20, g_nSqSize = 64;
-HBITMAP PieceBitmaps[32];
-int g_nSelSquare = NO_SQUARE;
 char g_buffer[32768];	// For PDN copying/pasting/loading/saving
 
-int g_nDouble = 0;
-bool g_bSetupBoard = false;
-
-HWND MainWnd = nullptr;
-HWND BottomWnd = nullptr;
+WindowsGUI winGUI;
 
 void OnNewGame(const SBoard& startBoard);
 
 // ------------------------------------
 // Initialize the GUI and the Engine
 // ------------------------------------
-static int AnyInstance(HINSTANCE this_inst)
+int WindowsGUI::AnyInstance(HINSTANCE this_inst)
 {
 	const int width = 720;
 	const int height = 710;
 
 	// create main window
-	MainWnd = CreateWindow("GuiCheckersClass",
+	winGUI.MainWnd = CreateWindow("GuiCheckersClass",
 		g_VersionName,
 		WS_OVERLAPPEDWINDOW | WS_CLIPCHILDREN,
 		CW_USEDEFAULT, CW_USEDEFAULT,
 		width, height,
 		NULL, NULL, this_inst, NULL);
 
-	if (MainWnd == NULL)
+	if (winGUI.MainWnd == NULL)
 		return FALSE;
 
-	BottomWnd = CreateDialog(this_inst, "BotWnd", MainWnd, InfoProc);
+	winGUI.BottomWnd = CreateDialog(this_inst, "BotWnd", winGUI.MainWnd, WindowsGUI::InfoProc);
 
 	// Load Piece Bitmaps
 	char* psBitmapNames[10] = { nullptr, "Rcheck", "Wcheck", nullptr, nullptr, "RKing", "Wking", "Wsquare", "Bsquare", nullptr };
 	for (int i = 0; i < 9; i++) {
 		if (psBitmapNames[i] != nullptr)
-			PieceBitmaps[i] = (HBITMAP)LoadImage(this_inst, psBitmapNames[i], IMAGE_BITMAP, 0, 0, 0);
+			winGUI.PieceBitmaps[i] = (HBITMAP)LoadImage(this_inst, psBitmapNames[i], IMAGE_BITMAP, 0, 0, 0);
 	}
 
-	MoveWindow(BottomWnd, 0, 550, width, 160, TRUE);
-	ShowWindow(MainWnd, SW_SHOW);
-	ThinkingMenuActive(false);
+	MoveWindow(winGUI.BottomWnd, 0, 550, width, 160, TRUE);
+	ShowWindow(winGUI.MainWnd, SW_SHOW);
+	winGUI.ThinkingMenuActive(false);
 
-	DrawBoard(engine.board);
+	winGUI.DrawBoard(engine.board);
 
 	engine.Init( nullptr );
 
 	OnNewGame(SBoard::StartPosition());
-	DisplayText( engine.GetInfoString() );
+	DisplayText( engine.GetInfoString().c_str() );
 
 	return TRUE;
 }
@@ -83,7 +70,7 @@ static int AnyInstance(HINSTANCE this_inst)
 // ------------------------------------
 //  Register window class for the application if this is first instance
 // ------------------------------------
-int RegisterClass(HINSTANCE this_inst)
+int WindowsGUI::RegisterClass(HINSTANCE this_inst)
 {
 	WNDCLASSEX wc;
 	wc.cbSize = sizeof(WNDCLASSEX);
@@ -110,9 +97,9 @@ int RegisterClass(HINSTANCE this_inst)
 int WINAPI WinMain(HINSTANCE this_inst, HINSTANCE prev_inst, LPSTR cmdline, int cmdshow)
 {
 	if (!prev_inst)
-		RegisterClass(this_inst);
+		winGUI.RegisterClass(this_inst);
 
-	if (AnyInstance(this_inst) == FALSE)
+	if (winGUI.AnyInstance(this_inst) == FALSE)
 		return(FALSE);
 
 	// Main message loop
@@ -136,20 +123,20 @@ void DisplayText(const char* sText)
 			strcpy(checkerBoard.infoString, sText);
 		}
 	}
-	else if (BottomWnd)
+	else if (winGUI.BottomWnd)
 	{
-		SetDlgItemText(BottomWnd, 150, sText);
+		SetDlgItemText(winGUI.BottomWnd, 150, sText);
 	}
 }
 
-void ShowErrorPopup(const char* text)
+void WindowsGUI::ShowErrorPopup(const char* text)
 {
-	MessageBox(MainWnd, "Cannot Create Thread", "Error", MB_OK);
+	MessageBox(winGUI.MainWnd, "Cannot Create Thread", "Error", MB_OK);
 }
 
-void UpdateMenuChecks()
+void WindowsGUI::UpdateMenuChecks()
 {
-	HMENU menu = GetMenu(MainWnd);
+	HMENU menu = GetMenu(winGUI.MainWnd);
 	CheckMenuItem(menu, ID_OPTIONS_BEGINNER, (engine.searchLimits.maxDepth == BEGINNER_DEPTH) ? MF_CHECKED : MF_UNCHECKED);
 	CheckMenuItem(menu, ID_OPTIONS_NORMAL, (engine.searchLimits.maxDepth == NORMAL_DEPTH) ? MF_CHECKED : MF_UNCHECKED);
 	CheckMenuItem(menu, ID_OPTIONS_EXPERT, (engine.searchLimits.maxDepth == EXPERT_DEPTH) ? MF_CHECKED : MF_UNCHECKED);
@@ -170,14 +157,14 @@ void UpdateMenuChecks()
 // -------------------------------
 // WINDOWS CLIPBOARD FUNCTIONS
 // -------------------------------
-int TextToClipboard(const char* sText)
+int WindowsGUI::TextToClipboard(const char* sText)
 {
 	DisplayText(sText);
 
 	char* bufferPtr;
 	static HGLOBAL clipTranscript;
 	size_t nLen = strlen(sText);
-	if (OpenClipboard(MainWnd) == TRUE) {
+	if (OpenClipboard(winGUI.MainWnd) == TRUE) {
 		EmptyClipboard();
 		clipTranscript = GlobalAlloc(GMEM_DDESHARE | GMEM_MOVEABLE, nLen + 10);
 		bufferPtr = (char*)GlobalLock(clipTranscript);
@@ -192,14 +179,14 @@ int TextToClipboard(const char* sText)
 	return 0;
 }
 
-int TextFromClipboard(char* sText, int nMaxBytes)
+int WindowsGUI::TextFromClipboard(char* sText, int nMaxBytes)
 {
 	if (!IsClipboardFormatAvailable(CF_TEXT)) {
 		DisplayText("No Clipboard Data");
 		return 0;
 	}
 
-	OpenClipboard(MainWnd);
+	OpenClipboard(winGUI.MainWnd);
 
 	HANDLE hData = GetClipboardData(CF_TEXT);
 	LPVOID pData = GlobalLock(hData);
@@ -217,7 +204,7 @@ int TextFromClipboard(char* sText, int nMaxBytes)
 }
 
 // Gray out certain items
-void ThinkingMenuActive(int bOn)
+void WindowsGUI::ThinkingMenuActive(int bOn)
 {
 	int SwitchItems[10] =
 	{
@@ -235,13 +222,13 @@ void ThinkingMenuActive(int bOn)
 	UINT newEnabled = (bOn) ? MF_GRAYED : MF_ENABLED;
 
 	for (int i = 0; i < 8; i++) {
-		EnableMenuItem(GetMenu(MainWnd), SwitchItems[i], newEnabled);
+		EnableMenuItem(GetMenu(winGUI.MainWnd), SwitchItems[i], newEnabled);
 	}
 
-	EnableMenuItem(GetMenu(MainWnd), ID_GAME_MOVENOW, (bOn) ? MF_ENABLED : MF_GRAYED);
+	EnableMenuItem(GetMenu(winGUI.MainWnd), ID_GAME_MOVENOW, (bOn) ? MF_ENABLED : MF_GRAYED);
 }
 
-void SetComputerColor(eColor Color)
+void WindowsGUI::SetComputerColor(eColor Color)
 {
 	engine.computerColor = Color;
 	UpdateMenuChecks();
@@ -251,17 +238,17 @@ void OnNewGame(const SBoard& startBoard)
 {
 	engine.NewGame(startBoard);
 
-	SetComputerColor(WHITE);
+	winGUI.SetComputerColor(WHITE);
 
-	g_nSelSquare = NO_SQUARE;
-	g_nDouble = 0;
+	winGUI.nSelSquare = NO_SQUARE;
+	winGUI.nDouble = 0;
 
 	DisplayText("The Game Begins...");
-	DrawBoard(engine.board);
+	winGUI.DrawBoard(engine.board);
 }
 
 // Perform a move on the game board
-void DoGameMove(SMove doMove)
+void WindowsGUI::DoGameMove(SMove doMove)
 {
 	if ((clock() - starttime) < (CLOCKS_PER_SEC / 4)) {
 		Sleep(200); // pause a bit if move is really quick
@@ -284,7 +271,7 @@ void DoGameMove(SMove doMove)
 //  Check Possiblity/Execute Move from one selected square to another
 //  returns INVALID_MOVE if the move is not possible, VALID_MOVE if it is or DOUBLEJUMP if the move is an uncompleted jump
 // ---------------------------------------------
-eMoveResult SquareMove(SBoard& board, int x, int y, int xloc, int yloc, eColor Color)
+eMoveResult WindowsGUI::SquareMove(SBoard& board, int x, int y, int xloc, int yloc, eColor Color)
 {
 	CMoveList MoveList;
 	MoveList.FindMoves(Color, board.Bitboards);
@@ -298,16 +285,16 @@ eMoveResult SquareMove(SBoard& board, int x, int y, int xloc, int yloc, eColor C
 		if (move.Src() == src && move.Dst() == dst)
 		{
 			// Check if the src & dst match a move from the generated movelist
-			if (g_nDouble > 0)
+			if (nDouble > 0)
 			{
 				// Build double jump move for game transcript
 				SMove& jumpMove = engine.transcript.Back();
 				for (int j = 0; j < 4; j++) {
 					if (dst - src == JumpAddDir[j]) {
-						jumpMove.SetJumpDir(g_nDouble - 1, j);
+						jumpMove.SetJumpDir(nDouble - 1, j);
 					}
 				}
-				jumpMove.SetJumpLen(g_nDouble + 1);
+				jumpMove.SetJumpLen(nDouble + 1);
 			}
 			else 
 			{
@@ -318,13 +305,13 @@ eMoveResult SquareMove(SBoard& board, int x, int y, int xloc, int yloc, eColor C
 			{
 				// perform the first part of the move on board, will have to move again
 				board.DoSingleJump(src, dst, board.GetPiece(src), board.SideToMove );
-				g_nDouble++;
+				nDouble++;
 				return DOUBLEJUMP;
 			}
 
 			board.DoMove(move);
 
-			g_nDouble = 0;
+			nDouble = 0;
 			return VALID_MOVE;
 		}
 	}
@@ -335,23 +322,23 @@ eMoveResult SquareMove(SBoard& board, int x, int y, int xloc, int yloc, eColor C
 //---------------------------------------------------------
 // Draw a frame around a square clicked on by user
 //----------------------------------------------------------
-void HighlightSquare(HDC hdc, int Square, int sqSize, unsigned long color, int border)
+void WindowsGUI::HighlightSquare(HDC hdc, int Square, int sqSize, unsigned long color, int border)
 {
 	HBRUSH brush = CreateSolidBrush(color);
 
 	if (Square >= 0 && Square <= 63)
 	{
 		int x = Square % 8, y = Square / 8;
-		if (BoardFlip == 1) {
+		if (bBoardFlip) {
 			x = 7 - x;
 			y = 7 - y;
 		}
 
 		RECT rect;
-		rect.left = x * sqSize + g_xAdd;
-		rect.right = (x + 1) * sqSize + g_xAdd;
-		rect.top = y * sqSize + g_yAdd;
-		rect.bottom = (y + 1) * sqSize + g_yAdd;
+		rect.left = x * sqSize + xAdd;
+		rect.right = (x + 1) * sqSize + xAdd;
+		rect.top = y * sqSize + yAdd;
+		rect.bottom = (y + 1) * sqSize + yAdd;
 
 		FrameRect(hdc, &rect, brush);
 
@@ -370,7 +357,7 @@ void HighlightSquare(HDC hdc, int Square, int sqSize, unsigned long color, int b
 //---------------------------------------------------------------
 // Function to Draw a single Bitmap
 // --------------------------------------------------------------
-void DrawBitmap(HDC hdc, HBITMAP bitmap, int x, int y, int nSize)
+void WindowsGUI::DrawBitmap(HDC hdc, HBITMAP bitmap, int x, int y, int nSize)
 {
 	BITMAP bitmapbuff;
 	HDC memorydc;
@@ -418,13 +405,13 @@ void DrawBitmap(HDC hdc, HBITMAP bitmap, int x, int y, int nSize)
 // ------------------
 // Draw Board
 // ------------------
-void DrawBoard(const SBoard& board)
+void WindowsGUI::DrawBoard(const SBoard& board)
 {
 	HDC hdc = GetDC(MainWnd);
 	int start = 0, add = 1, add2 = 1, x = 0, y = 0, mul = 1;
 	int nSize = 64;
 
-	if (BoardFlip == 1) {
+	if (bBoardFlip) {
 		start = 63;
 		add = -1;
 		add2 = 0;
@@ -436,16 +423,16 @@ void DrawBoard(const SBoard& board)
 		if (board.GetPiece(BoardLoc[i]) != EMPTY && board.GetPiece(BoardLoc[i]) != INVALID) {
 			DrawBitmap(hdc,
 				PieceBitmaps[board.GetPiece(BoardLoc[i])],
-				x * nSize * mul + g_xAdd,
-				y * nSize * mul + g_yAdd,
+				x * nSize * mul + xAdd,
+				y * nSize * mul + yAdd,
 				nSize);
 		}
 
 		// empty square
 		else if (((i % 2 == 1) && (i / 8) % 2 == 1) || ((i % 2 == 0) && (i / 8) % 2 == 0))
-			DrawBitmap(hdc, PieceBitmaps[7], x * nSize * mul + g_xAdd, y * nSize * mul + g_yAdd, nSize);
+			DrawBitmap(hdc, PieceBitmaps[7], x * nSize * mul + xAdd, y * nSize * mul + yAdd, nSize);
 		else
-			DrawBitmap(hdc, PieceBitmaps[8], x * nSize * mul + g_xAdd, y * nSize * mul + g_yAdd, nSize);
+			DrawBitmap(hdc, PieceBitmaps[8], x * nSize * mul + xAdd, y * nSize * mul + yAdd, nSize);
 
 		x++;
 		if (x == 8) {
@@ -454,8 +441,8 @@ void DrawBoard(const SBoard& board)
 		}
 	}
 
-	if (g_nSelSquare != NO_SQUARE)
-		HighlightSquare(hdc, g_nSelSquare, g_nSqSize, 0xFFFFFF, 1);
+	if (nSelSquare != NO_SQUARE)
+		HighlightSquare(hdc, nSelSquare, nSqSize, 0xFFFFFF, 1);
 
 	ReleaseDC(MainWnd, hdc);
 }
@@ -475,8 +462,9 @@ void ReplayGame(Transcript& transcript, SBoard& Board)
 	}
 
 	transcript.numMoves = i;
-	g_nSelSquare = NO_SQUARE;
-	g_nDouble = 0;
+
+	winGUI.nSelSquare = NO_SQUARE;
+	winGUI.nDouble = 0;
 }
 
 // --------------------
@@ -486,7 +474,7 @@ static unsigned char sSaveGame[] = "Checkers Game (*.pdn)\0*.pdn\0\0";
 
 static BOOL GetFileName(HWND hwnd, BOOL save, char* fname, unsigned char* filterList)
 {
-	OPENFILENAME of;
+	OPENFILENAME of; // FIXME : why doesn't this work?
 	int rc;
 
 	memset(&of, 0, sizeof(OPENFILENAME));
@@ -510,7 +498,7 @@ static BOOL GetFileName(HWND hwnd, BOOL save, char* fname, unsigned char* filter
 }
 
 // ------------------
-// File I/O
+// File I/O... these are actually win GUI specific
 // ------------------
 void SaveGame(char* sFilename)
 {
@@ -531,7 +519,7 @@ void ReadPDNFromBuffer(const char* buffer)
 
 	ReplayGame(engine.transcript, engine.board);
 
-	DrawBoard(engine.board);
+	winGUI.DrawBoard(engine.board);
 	DisplayText(buffer);
 }
 
@@ -555,40 +543,41 @@ void LoadGame(char* sFilename)
 //
 // GUI HELPER FUNCTIONS
 //
-void EndSetup()
+void WindowsGUI::EndBoardSetup()
 {
-	engine.board.SetFlags();
-	g_bSetupBoard = FALSE;
-	engine.transcript.Init(engine.board);
-	DisplayText("");
+	if (bSetupBoard)
+	{
+		engine.board.SetFlags();
+		bSetupBoard = FALSE;
+		engine.transcript.Init(engine.board);
+		DisplayText("");
+	}
 }
 
 void ComputerGo()
 {
-	if (g_bSetupBoard) {
-		EndSetup();
-	}
+	winGUI.EndBoardSetup();
 
 	if (engine.bThinking) {
 		engine.MoveNow();
 	} else {
-		ThinkingMenuActive(true);
+		winGUI.ThinkingMenuActive(true);
 		engine.StartThinking();
 	}
 }
 
 // This changes x and y from window coords to board coords (Kinda weird)
-int GetSquare(int& x, int& y)
+int WindowsGUI::GetSquare(int& x, int& y)
 {
 	// Calculate the square the user clicked on (0-63)
-	x = (x - g_xAdd) / g_nSqSize;
-	y = (y - g_yAdd) / g_nSqSize;
+	x = (x - xAdd) / nSqSize;
+	y = (y - yAdd) / nSqSize;
 
 	// Make sure it's valid, preferrably this function would only be called with valid input
 	x = ClampInt(x, 0, 7);
 	y = ClampInt(y, 0, 7);
 
-	if (BoardFlip) {
+	if (bBoardFlip) {
 		x = 7 - x;
 		y = 7 - y;
 	}
@@ -596,7 +585,7 @@ int GetSquare(int& x, int& y)
 	return x + y * 8;
 }
 
-void DisplayEvaluation()
+void WindowsGUI::DisplayEvaluation()
 {
 	int Eval = -engine.board.EvaluateBoard(0, g_searchInfo.databaseNodes);
 
@@ -641,18 +630,17 @@ void DisplayEvaluation()
 	DisplayText(g_buffer);
 }
 
-void CopyFen()
+void WindowsGUI::CopyFen()
 {
-	engine.board.ToFen(g_buffer);
-	TextToClipboard(g_buffer);
+	winGUI.TextToClipboard( engine.board.ToFen().c_str() );
 }
 
-void CopyPDN()
+void WindowsGUI::CopyPDN()
 {
-	TextToClipboard( engine.transcript.ToPDN().c_str() );
+	winGUI.TextToClipboard( engine.transcript.ToPDN().c_str() );
 }
 
-void PasteFen()
+void WindowsGUI::PasteFen()
 {
 	if (TextFromClipboard(g_buffer, 512))
 	{
@@ -664,7 +652,7 @@ void PasteFen()
 	}
 }
 
-void PastePDN()
+void WindowsGUI::PastePDN()
 {
 	if (TextFromClipboard(g_buffer, 16380))
 	{
@@ -675,16 +663,16 @@ void PastePDN()
 void SetSearchDepth(int newDepth)
 {
 	engine.searchLimits.maxDepth = newDepth;
-	UpdateMenuChecks();
+	winGUI.UpdateMenuChecks();
 }
 
 void SetSearchTime(float newTime)
 {
 	engine.searchLimits.maxSeconds = newTime;
-	UpdateMenuChecks();
+	winGUI.UpdateMenuChecks();
 }
 
-void SetupAddPiece(int x, int y, eColor color)
+void WindowsGUI::SetupAddPiece(int x, int y, eColor color)
 {
 	int square64 = GetSquare(x, y);
 
@@ -728,7 +716,7 @@ std::string GetTTEntryString(TEntry* entry, eColor stm)
 	return ret;
 }
 
-void KeyboardCommands(int key)
+void WindowsGUI::KeyboardCommands(int key)
 {
 	// Opening Book Edit
 	if (key == '2')
@@ -748,13 +736,13 @@ void KeyboardCommands(int key)
 
 	// Copy / Paste
 	if (key == 'V')
-		PasteFen();
+		winGUI.PasteFen();
 	if (key == 'C')
-		CopyFen();
+		winGUI.CopyFen();
 	if (key == 'V' && (GetKeyState(VK_CONTROL) < 0))
-		PastePDN();
+		winGUI.PastePDN();
 	if (key == 'C' && (GetKeyState(VK_CONTROL) < 0))
-		CopyPDN();
+		winGUI.CopyPDN();
 
 	if (key == 'G')
 		ComputerGo();
@@ -793,11 +781,12 @@ void SetTranscriptPosition( int newPos )
 
 	engine.transcript.numMoves = std::max( newPos, 0 );
 	ReplayGame(engine.transcript, engine.board);
-	DrawBoard(engine.board);
-	SetFocus(MainWnd);
+
+	winGUI.DrawBoard(engine.board);
+	SetFocus(winGUI.MainWnd);
 }
 
-INT_PTR CALLBACK InfoProc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam)
+INT_PTR CALLBACK WindowsGUI::InfoProc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam)
 {
 	switch (msg) {
 	case WM_COMMAND:
@@ -823,13 +812,9 @@ INT_PTR CALLBACK InfoProc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam)
 			break;
 
 		case IDC_GO:
-			if (g_bSetupBoard) {
-				EndSetup();
-				break;
-			}
-
+			winGUI.EndBoardSetup();
 			ComputerGo();
-			SetFocus(MainWnd);
+			SetFocus(winGUI.MainWnd);
 			break;
 		}
 	}
@@ -868,12 +853,12 @@ INT_PTR CALLBACK LevelDlgProc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM /*lpara
 //
 // Process a command message
 //
-void ProcessCommand(WORD cmd, HWND hwnd)
+void WindowsGUI::ProcessCommand(WORD cmd, HWND hwnd)
 {
 	switch (cmd)
 	{
 	case ID_GAME_FLIPBOARD:
-		BoardFlip = !BoardFlip;
+		bBoardFlip = !bBoardFlip;
 		DrawBoard(engine.board);
 		break;
 
@@ -899,7 +884,7 @@ void ProcessCommand(WORD cmd, HWND hwnd)
 
 	case ID_GAME_HASHING:
 		engine.bUseHashTable = !engine.bUseHashTable;
-		UpdateMenuChecks();
+		winGUI.UpdateMenuChecks();
 		break;
 
 	case ID_GAME_CLEAR_HASH:
@@ -941,11 +926,11 @@ void ProcessCommand(WORD cmd, HWND hwnd)
 		break;
 
 	case ID_EDIT_SETUPBOARD:
-		if (g_bSetupBoard) {
-			EndSetup();
+		if (bSetupBoard) {
+			winGUI.EndBoardSetup();
 		}
 		else {
-			g_bSetupBoard = TRUE;
+			bSetupBoard = TRUE;
 			DisplayText("BOARD SETUP MODE.       (Click GO to end) \n(shift+click to erase pieces) \n(alt+click on a piece to set that color to move)");
 		}
 		break;
@@ -998,7 +983,12 @@ void ProcessCommand(WORD cmd, HWND hwnd)
 // ===============================================
 // Process messages to the MAIN Window
 // ===============================================
-LRESULT CALLBACK WindowProc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam)
+LRESULT CALLBACK WindowsGUI::WindowProc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam)
+{
+	return winGUI.ProcessMessage(hwnd, msg, wparam, lparam);
+}
+
+LRESULT WindowsGUI::ProcessMessage(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam)
 {
 	HDC hdc;
 	int x, y;
@@ -1024,7 +1014,7 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam)
 		y = (int)HIWORD(lparam);
 		nSquare = GetSquare(x, y);
 
-		if (g_bSetupBoard)
+		if (bSetupBoard)
 		{
 			if (msg == WM_LBUTTONUP)
 				return TRUE;
@@ -1042,35 +1032,35 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam)
 			if (msg == WM_LBUTTONUP)
 				return TRUE;
 
-			if (g_nDouble != 0)
+			if (nDouble != 0)
 				return TRUE;  // Can't switch to a different piece when double jumping
 
 			if (((engine.board.GetPiece(BoardLoc[nSquare]) & BPIECE) && engine.board.SideToMove == BLACK) ||
 				((engine.board.GetPiece(BoardLoc[nSquare]) & WPIECE) && engine.board.SideToMove == WHITE))
 			{
-				g_nSelSquare = nSquare;
-				if (g_nSelSquare != NO_SQUARE) {
+				nSelSquare = nSquare;
+				if (nSelSquare != NO_SQUARE) {
 					DrawBoard(engine.board);
 				}
 
 				hdc = GetDC(MainWnd);
-				HighlightSquare(hdc, g_nSelSquare, g_nSqSize, 0xFFFFFF, 1);
+				HighlightSquare(hdc, nSelSquare, nSqSize, 0xFFFFFF, 1);
 				ReleaseDC(MainWnd, hdc);
 			}
 		}
-		else if (g_nSelSquare >= 0 && g_nSelSquare <= 63)
+		else if (nSelSquare >= 0 && nSelSquare <= 63)
 		{
 			// Did the user click on a valid destination square?
-			eMoveResult MoveResult = SquareMove(engine.board, g_nSelSquare % 8, g_nSelSquare / 8, x, y, engine.board.SideToMove);
+			eMoveResult MoveResult = SquareMove(engine.board, nSelSquare % 8, nSelSquare / 8, x, y, engine.board.SideToMove);
 			if (MoveResult == VALID_MOVE) {
-				g_nSelSquare = NO_SQUARE;
+				nSelSquare = NO_SQUARE;
 				DrawBoard(engine.board);
 
 				if (engine.computerColor == engine.board.SideToMove)
 					ComputerGo();
 			}
 			else if (MoveResult == DOUBLEJUMP) {
-				g_nSelSquare = nSquare;
+				nSelSquare = nSquare;
 				DrawBoard(engine.board);
 			}
 		}
@@ -1079,7 +1069,7 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam)
 
 	case WM_RBUTTONDOWN:
 
-		if (g_bSetupBoard)
+		if (bSetupBoard)
 		{
 			SetupAddPiece((int)LOWORD(lparam), (int)HIWORD(lparam), WHITE);
 			return(TRUE);

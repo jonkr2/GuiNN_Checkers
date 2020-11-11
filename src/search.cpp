@@ -118,9 +118,10 @@ int ABSearch( int32_t ply, int32_t depth, int32_t alpha, int32_t beta, bool isPV
 
 	// Internal Iterative Deepening : set predictedBestmove if there's no bestmove already
 	SMove predictedBestmove = bestmove;
-	if (predictedBestmove == NO_MOVE && depth > 4 ) {
-		int val = ABSearch( ply, depth-4, alpha, beta, false, predictedBestmove);
+	if (predictedBestmove == NO_MOVE && depth > 4 - isPV ) {
+		int val = ABSearch( ply, std::max(depth-4,1), alpha, beta, false, predictedBestmove);
 		if (val == TIMEOUT) return TIMEOUT;
+		if (predictedBestmove != NO_MOVE) bestmove = predictedBestmove;
 	}
 
 	// Accessors for the stack variables
@@ -137,8 +138,7 @@ int ABSearch( int32_t ply, int32_t depth, int32_t alpha, int32_t beta, bool isPV
 	if (moveList.numMoves == 0) { 
 		return -WinScore( ply - 1 ); // If you can't move, you've already lost the game
 	}
-	int bestValue = -WinScore(ply);
-	alpha = std::max(alpha, bestValue);
+	alpha = std::max(alpha, -WinScore(ply));
 	if (alpha >= beta) return beta;
 	if (alpha >= WinScore(ply)) return alpha; // have a guaranteed faster win already, so don't waste time searching
 
@@ -189,12 +189,12 @@ int ABSearch( int32_t ply, int32_t depth, int32_t alpha, int32_t beta, bool isPV
 		// Reset the board to the one it was called with, then play the move
         board = g_stack[ply-1].board;
 		const ePieceType movedPiece = board.GetPiece(move.Src());
-        int unreversible = board.DoMove( move );
+        const int unreversible = board.DoMove( move );
 
 		engine.boardHashHistory[ engine.transcript.numMoves + ply] = board.HashKey;
-		g_searchInfo.nodes++;
 		searchedMoves[movesSearched++] = move;
 		g_stack[ply].historyMoveIdx = engine.historyTable.MoveIdx(move.Src(), move.Dir(0), movedPiece );
+		g_searchInfo.nodes++;
 
         // If the game is over after making this move, return a gameover value now
 		if (board.Bitboards.P[WHITE] == 0 || board.Bitboards.P[BLACK] == 0)
@@ -280,11 +280,6 @@ int ABSearch( int32_t ply, int32_t depth, int32_t alpha, int32_t beta, bool isPV
 					const int pvsDepth = nextDepth - doLMR;
 					value = -ABSearch( ply + 1, pvsDepth, -(alpha + 1), -alpha, false, nextBestmove);
 					if (value == -TIMEOUT) return TIMEOUT;
-
-					// Store for the search info for this position in the tranposition table entry
-					if (ttEntry) {
-						ttEntry->Write(board.HashKey, alpha, alpha+1, nextBestmove, value, boardEval, pvsDepth, ply, engine.ttAge);
-					}
 				}
 
 				// full-width and depth search
@@ -292,16 +287,16 @@ int ABSearch( int32_t ply, int32_t depth, int32_t alpha, int32_t beta, bool isPV
 				{
 					value = -ABSearch( ply + 1, nextDepth, -beta, -alpha, isPV && movesSearched <= 1, nextBestmove);
 					if (value == -TIMEOUT) return TIMEOUT;
+				}
 
-					// Store for the search info for this position in the tranposition table entry
-					if (ttEntry) {
-						ttEntry->Write(board.HashKey, alpha, beta, nextBestmove, value, boardEval, nextDepth, ply, engine.ttAge);
-					}
+				// Store for the search info for this position in the tranposition table entry
+				if (ttEntry) {
+					ttEntry->Write(board.HashKey, alpha, beta, nextBestmove, value, boardEval, nextDepth, ply, engine.ttAge);
 				}
             }
 		}
 
-		if (ply == 1 && abs(value) < 1000)
+		if (ply == 1 && abs(value) < MIN_WIN_SCORE)
 		{
 			// Penalize moves at root that repeat positions, so hopefully the computer will always make progress if possible... 
 			if ( Repetition( board.HashKey, 0, engine.transcript.numMoves+1) ) value = (value>>1);
@@ -309,24 +304,18 @@ int ABSearch( int32_t ply, int32_t depth, int32_t alpha, int32_t beta, bool isPV
 		}
 
         // Keep Track of Best Move and Alpha-Beta Prune
-        if (value > bestValue )
+		if (value > alpha)
 		{
 			bestmove = move;
-			bestValue = value;
-			assert(abs(value) < 2002);
+			alpha = value;
 
-			if (value > alpha)
+			if (alpha >= beta) 
 			{
-				alpha = value;
-
-				if (alpha >= beta) 
-				{
-					if (moveList.numJumps == 0) {
-						UpdateHistory(engine.historyTable, bestmove, depth, board, ply, prevOppMoveIdx, searchedMoves, movesSearched);
-					}
-
-					return beta;
+				if (moveList.numJumps == 0) {
+					UpdateHistory(engine.historyTable, bestmove, depth, board, ply, prevOppMoveIdx, searchedMoves, movesSearched);
 				}
+
+				return beta;
 			}
 		}
 	} // end move loop
@@ -335,7 +324,7 @@ int ABSearch( int32_t ply, int32_t depth, int32_t alpha, int32_t beta, bool isPV
 		UpdateHistory(engine.historyTable, bestmove, depth, board, ply, prevOppMoveIdx, searchedMoves, movesSearched );
 	}
 
-	return bestValue;
+	return alpha;
 }
 
 // -------------------------------------------------
@@ -382,7 +371,7 @@ BestMoveInfo ComputerMove( SBoard &InBoard )
 		}
 
 		// Initialize search depth
-		int depth = (engine.searchLimits.maxDepth < 4) ? engine.searchLimits.maxDepth : 4;
+		int depth = (engine.searchLimits.maxDepth < 4) ? engine.searchLimits.maxDepth : 2;
 		int Eval = 0;
 
 		// Iteratively deepen until until the computer runs out of time, or reaches g_MaxDepth ply
@@ -408,10 +397,11 @@ BestMoveInfo ComputerMove( SBoard &InBoard )
 				 {
 					 LastEval = Eval;
 					 g_searchInfo.eval = (InBoard.SideToMove == BLACK) ? -LastEval : LastEval; // keep eval from reds point of view
+					 float elapsedTime = (float)(clock() - starttime) / (float)CLOCKS_PER_SEC;
 
 					 // Check if there is only one legal move, if so don't keep searching
-					 if (moveList.numMoves == 1 && engine.searchLimits.maxDepth > 6) Eval = TIMEOUT;
-					 if ((clock() - starttime) > (CLOCKS_PER_SEC * engine.searchLimits.maxSeconds * .75f)  // probably won't get any useful info before timeup
+					 if (moveList.numMoves == 1 && engine.searchLimits.maxDepth > 6) { Eval = TIMEOUT; }
+					 if (elapsedTime > engine.searchLimits.maxSeconds * .7f  // probably won't get any useful info before timeup
 						 || (abs(Eval) > WinScore(depth) )) // found a win, can stop searching now) 
 					 {
 						 Eval = TIMEOUT;

@@ -54,7 +54,7 @@ void COpeningBook::AddPosition( uint32_t key, uint32_t checksum, int16_t wValue,
 			if (!bQuiet) 
 			{
 				 sprintf( sTemp, "Position Exists. %d\nValue was %d now %d", entryIdx, pEntry->value, pEntry->value + wValue);
-	 			 DisplayText ( sTemp );
+	 			 DisplayText( sTemp );
 			}
 			pEntry->value += wValue;
 			return;
@@ -63,7 +63,7 @@ void COpeningBook::AddPosition( uint32_t key, uint32_t checksum, int16_t wValue,
 		{
 			if (m_nListSize >= BOOK_EXTRA_SIZE)
 			{
-				DisplayText ("Book Full!");
+				DisplayText( "Book Full!" );
 				return;
 			}
 			pEntry->pNext = &m_pExtra[ m_nListSize ];
@@ -156,7 +156,7 @@ int COpeningBook::Load( const char *sFileName )
 	fclose ( fp );
 
 	char sTemp[ 255 ];
-	sprintf( sTemp, "%d Positions Loaded", i);
+	snprintf( sTemp, sizeof(sTemp), "%d Positions Loaded", i);
 	DisplayText( sTemp );
 
 	return true;

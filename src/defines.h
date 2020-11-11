@@ -5,8 +5,9 @@
 
 #define USE_AVX // Need to compile without AVX for older CPUs
 #define USE_SSE2 // I think all 64-bit PCs have SSE2, so no reason to turn this off
+// #define NO_POP_COUNT // for very old processors that have no hardware popcount instruction
 
-static const char* g_VersionName = "GuiNN Checkers 2.0";
+static const char* g_VersionName = "GuiNN Checkers 2.01";
 
 const int MAX_GAMEMOVES = 2048;
 const int INV = 33; // invalid square

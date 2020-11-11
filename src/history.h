@@ -43,11 +43,12 @@ struct HistoryTable
 		memset(counterHistory, 0, sizeof(counterHistory));
 	}
 
-	static constexpr int PIECE_DIR_SRC_SIZE = 4 * 4 * 32; // pieceType, move direction, source square
-	int16_t history[PIECE_DIR_SRC_SIZE];
-	int16_t counterHistory[PIECE_DIR_SRC_SIZE * PIECE_DIR_SRC_SIZE];
 	static constexpr int pieceType[8] = { 0, 0, 1, 0, 0, 2, 3, 0 };
 	static constexpr int HISTORY_MAX = (1 << 15);
+	static constexpr int PIECE_DIR_SRC_SIZE = 4 * 4 * 32; // pieceType, move direction, source square
+
+	int16_t history[PIECE_DIR_SRC_SIZE];
+	int16_t counterHistory[PIECE_DIR_SRC_SIZE * PIECE_DIR_SRC_SIZE];
 };
 
 static void HistorySort(HistoryTable& historyTable, CMoveList& moveList, int startIdx, const SBoard& board, int prevOppMoveIdx)
@@ -67,7 +68,7 @@ static void HistorySort(HistoryTable& historyTable, CMoveList& moveList, int sta
 	for (int d = startIdx + 1; d < numMoves; d++)
 	{
 		const SMove tempMove = moveList.Moves[d];
-		int tempScore = Scores[d];
+		const int tempScore = Scores[d];
 		int i;
 		for (i = d; i > startIdx && tempScore > Scores[i - 1]; i--)
 		{
@@ -83,18 +84,20 @@ static void UpdateHistory(HistoryTable& historyTable, const SMove& bestMove, int
 {
 	g_stack[ply].killerMove = bestMove;
 
-	int adjust = std::min(depth * std::max(depth - 1, 1), 16 * 16);
-	int src = bestMove.Src();
-	historyTable.AdjustHistory(src, bestMove.Dir(), board.GetPiece(src), prevOppMoveIdx, adjust);
-
-	if (numSearched > 1 && depth > 2)
+	if (depth > 1)
 	{
-		for (int i = 0; i < numSearched; i++)
+		int adjust = std::min(depth * (depth - 1), 15 * 15);
+		int src = bestMove.Src();
+		historyTable.AdjustHistory(src, bestMove.Dir(), board.GetPiece(src), prevOppMoveIdx, adjust);
+
+		if (numSearched > 1 && depth > 2)
 		{
-			if (searchedMoves[i] != bestMove) {
-				src = searchedMoves[i].Src();
-				int dst = searchedMoves[i].Dst();
-				historyTable.AdjustHistory(src, searchedMoves[i].Dir(), board.GetPiece(src), prevOppMoveIdx, -(adjust - 1));
+			for (int i = 0; i < numSearched; i++)
+			{
+				if (searchedMoves[i] != bestMove) {
+					src = searchedMoves[i].Src();
+					historyTable.AdjustHistory(src, searchedMoves[i].Dir(), board.GetPiece(src), prevOppMoveIdx, -(adjust - 1));
+				}
 			}
 		}
 	}

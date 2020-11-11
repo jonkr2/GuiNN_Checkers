@@ -29,6 +29,7 @@ int InitializeNeuralNets()
 		numLoaded += net->isLoaded ? 1 : 0;
 	}
 
+	// If nothing loaded, load nets from binary data instead. The released version won't have the development text nets.
 	if (numLoaded == 0) {
 		numLoaded = LoadBinaryNets("engines/Nets.gnn");
 		if (numLoaded == 0 ) numLoaded = LoadBinaryNets("Nets.gnn");
@@ -37,6 +38,7 @@ int InitializeNeuralNets()
 	return numLoaded;
 }
 
+// Load and Save nets from a single binary file
 int LoadBinaryNets(const char* filename)
 {
 	int validNets = 0;
@@ -84,7 +86,7 @@ bool CheckersNet::IsActive(const SBoard& board) const
 	const int numPieces = board.numPieces[WHITE] + board.numPieces[BLACK];
 
 	eGamePhase boardPhase = eGamePhase::EARLY_GAME;
-	if (numPieces <= 6) boardPhase = eGamePhase::LATE_END_GAME;
+	if (numPieces <= 6) boardPhase = eGamePhase::LATE_END_GAME; // TEST TODO : all kings uses FinishingEval, so might be better not to save the data
 	else if (numPieces <= 8) boardPhase = eGamePhase::END_GAME;
 	else if (board.Bitboards.K) boardPhase = eGamePhase::MID_GAME;
 

@@ -191,13 +191,13 @@ void InitBitTables();
 // Return the number of 1 bits in a 32-bit int
 int inline BitCount(uint32_t Moves)
 {
-#ifdef __GNUC__	
+#ifdef NO_POP_COUNT
+	if (Moves == 0) return 0;
+	return aBitCount[ (Moves & 65535) ] + aBitCount[ ((Moves>>16) & 65535) ];
+#elif __GNUC__	
 	return __builtin_popcountll(Moves);
 #else
 	return _mm_popcnt_u32(Moves);
-
-	/*if (Moves == 0) return 0;
-	return aBitCount[ (Moves & 65535) ] + aBitCount[ ((Moves>>16) & 65535) ];*/
 #endif
 
 }
@@ -205,11 +205,10 @@ int inline BitCount(uint32_t Moves)
 // Find the index of the "lowest" 1 bit of a 32-bit int
 uint32_t inline FindLowBit(uint32_t Moves)
 {
-	/*
+#ifdef NO_POP_COUNT
 	if ( (Moves & 65535) ) return aLowBit[ (Moves & 65535) ];
 	if ( ((Moves>>16) & 65535) ) return aLowBit[ ((Moves>>16) & 65535) ] + 16;
-	*/
-#ifdef __GNUC__
+#elif __GNUC__
 	// TODO : can we check this some other way, or not call it if zero, (eg. put assert(bb) back )
 	if (bb == 0) return 0;
 	unsigned long  sq = __builtin_ctzll(bb);
