@@ -132,13 +132,13 @@ void CreateTrainingSet()
 	std::vector<TrainingPosition> positionSet;
 
 	ConvertGamesToPositions(
-		{/* "Training/match1.pdn",*/
-		  "Training/match2.pdn",
-		  "Training/match3.pdn",
-		  "Training/match4.pdn",
-		  "Training/match5.pdn",
-		  "Training/match6.pdn",
-		  "Training/match7.pdn",
+		{/* "../Training/match1.pdn",*/
+		  "../Training/match2.pdn",
+		  "../Training/match3.pdn",
+		  "../Training/match4.pdn",
+		  "../Training/match5.pdn",
+		  "../Training/match6.pdn",
+		  "../Training/match7.pdn",
 		},
 		positionSet
 	);
@@ -149,7 +149,7 @@ int ImportLatestMatches(MatchResults& results)
 {
 	std::string matchDir = "C:/Users/Jon/Documents/Martin Fierz/CheckerBoard/games/matches/";
 	std::vector<std::string> filenums = { "", "[1]", "[2]", "[3]", "[4]", "[5]", "[6]", "[7]", "[8]", "[9]", "[10]" };
-	std::string outputFilename = "Training/match7.pdn";
+	std::string outputFilename = "../Training/match7.pdn";
 	
 	int importedFileCount = 0;
 	int wins = 0, losses = 0, draws = 0;

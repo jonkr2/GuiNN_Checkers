@@ -4,7 +4,7 @@
 #include <string>
 
 #define USE_AVX // Need to compile without AVX for older CPUs
-#define USE_SSE // I think all 64-bit PCs have SSE2, so no reason to turn this off
+#define USE_SSE2 // I think all 64-bit PCs have SSE2, so no reason to turn this off
 
 static const char* g_VersionName = "GuiNN Checkers 2.0";
 

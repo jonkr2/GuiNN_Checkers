@@ -86,7 +86,7 @@ int SBoard::FinishingEval()
 	eval += (BitCount(WK & CENTER_8) - BitCount(BK & CENTER_8)) * 4; // even better to be in center
 	if (TotalPieces() < 12 && Bitboards.GetCheckers() == 0)
 	{
-		eval += (numPieces[WHITE] - numPieces[BLACK]) * (240 - TotalPieces() * 20);
+		eval += (numPieces[WHITE] - numPieces[BLACK]) * (240 - TotalPieces() * 20); // encourage trading down
 	}
 	if (numPieces[WHITE] > numPieces[BLACK])
 	{
