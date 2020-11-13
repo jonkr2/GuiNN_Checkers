@@ -131,11 +131,16 @@ void RunningDisplay( const SMove& bestMove, int bSearching)
 	DisplayText(sTemp);
 }
 
-void SEngine::NewGame( const SBoard& startBoard )
+void SEngine::NewGame( const SBoard& startBoard, bool resetTranscript )
 {
-	transcript.Init( startBoard );
 	board = startBoard;
 	historyTable.Clear();
+
+	if (resetTranscript) { 
+		transcript.Init(startBoard); 
+	} else {
+		transcript.ReplayGame(board, boardHashHistory);
+	}
 }
 
 std::string SEngine::GetInfoString()

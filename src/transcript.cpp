@@ -3,12 +3,13 @@
 // by Jonathan Kreuzer
 //
 // Stores the everything needed to replay the game (start board and moves)
-// It supports converting to or fram a pdn string.
+// It supports converting to or from a pdn string.
 //
 
 #include <string.h>
 #include <stdio.h>
 #include <sstream> 
+#include <fstream>
 
 #include "defines.h"
 #include "transcript.h"
@@ -149,4 +150,46 @@ std::string Transcript::GetMoveString(const SMove& move)
 	char cap = (move.JumpLen() > 0) ? 'x' : '-';
 	int dst = StandardSquare(SMove::GetFinalDst(move));
 	return std::to_string(src) + cap + std::to_string(dst);
+}
+
+bool Transcript::Save(const char* filepath)
+{
+	std::ofstream file(filepath);
+	if (file.good())
+	{
+		file << ToPDN();
+		file.close();
+		return true;
+	}
+	return false;
+}
+
+bool Transcript::Load(const char* filepath)
+{
+	std::ifstream file(filepath);
+	if (file.good())
+	{
+		std::string content((std::istreambuf_iterator<char>(file)), std::istreambuf_iterator<char>()); // read the contents of file
+		file.close(); // close the file
+
+		FromPDN(content.c_str());
+		return true;
+	}
+	return false;
+}
+
+// ------------------
+// Replay Game from Game Move History up to nMove
+// ------------------
+void Transcript::ReplayGame(SBoard& board, uint64_t boardHashHistory[] )
+{
+	board = startBoard;
+
+	int i = 0;
+	while (moves[i].data != 0 && i < numMoves) {
+		boardHashHistory[i] = board.HashKey;
+		board.DoMove(moves[i]);
+		i++;
+	}
+	numMoves = i;
 }

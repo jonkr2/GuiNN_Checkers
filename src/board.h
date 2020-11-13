@@ -16,8 +16,6 @@ enum ePieceType {
 	INVALID = 8
 };
 
-enum eMoveType { SEARCHED = 127, HUMAN = 128, MAKEMOVE = 129 };
-
 // S[] contains 32-bit bitboards with a single bit for each of the 32 squares (plus 2 invalid squares with no bits set)
 const uint32_t S[34] = {
 	(1 << 0), (1 << 1), (1 << 2), (1 << 3), (1 << 4), (1 << 5), (1 << 6), (1 << 7), (1 << 8), (1 << 9), (1 << 10), (1 << 11), (1 << 12), (1 << 13), (1 << 14), (1 << 15),
@@ -51,8 +49,6 @@ struct SCheckerBitboards
 	uint32_t empty;	// Empty squares
 
 	// functions
-	int inline GetBlackMoves() const;
-	int inline GetWhiteMoves() const;
 	int inline CheckerMoves(const eColor c, uint32_t checkers) const;
 	uint32_t GetJumpers(const eColor c) const;
 	uint32_t inline GetMovers(const eColor c) const;
@@ -65,8 +61,8 @@ struct SBoard
 	void SetFlags();
 	uint64_t CalcHashKey();
 
-	int EvaluateBoard( int ahead, uint64_t& databaseNodes );
-	int FinishingEval();
+	int EvaluateBoard( int ahead, uint64_t& databaseNodes ) const;
+	int FinishingEval() const;
 
 	std::string ToFen();
 	int FromFen( char *sFEN );
@@ -92,7 +88,7 @@ struct SBoard
 
 		return (sq >= 32) ? INVALID : EMPTY;
 	}
-	inline int TotalPieces() 
+	inline int TotalPieces() const
 	{
 		return numPieces[BLACK] + numPieces[WHITE];
 	}

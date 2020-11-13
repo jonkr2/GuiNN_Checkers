@@ -6,7 +6,6 @@
 
 void DisplayText(const char* text);
 void RunningDisplay(const SMove& bestmove, int bSearching);
-void ReplayGame(Transcript& transcript, SBoard& Board);
 
 const int NO_SQUARE = 255;
 enum eMoveResult { INVALID_MOVE = 0, VALID_MOVE = 1, DOUBLEJUMP = 2000 };
@@ -19,6 +18,7 @@ public:
 	int RegisterClass(HINSTANCE this_inst);
 	static LRESULT CALLBACK WindowProc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam);
 	static INT_PTR CALLBACK InfoProc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam);
+	static INT_PTR CALLBACK LevelDlgProc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam);
 	LRESULT ProcessMessage(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam);
 	void ProcessCommand(WORD cmd, HWND hwnd);
 	void KeyboardCommands(int key);
@@ -35,7 +35,7 @@ public:
 	void SetupAddPiece(int x, int y, eColor color);
 	void EndBoardSetup();
 	int GetSquare(int& x, int& y);
-	void DisplayEvaluation();
+	void DisplayEvaluation(const SBoard& board);
 
 	int TextFromClipboard(char* sText, int nMaxBytes);
 	int TextToClipboard(const char* sText);

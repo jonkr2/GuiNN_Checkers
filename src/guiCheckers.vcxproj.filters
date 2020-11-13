@@ -172,5 +172,26 @@
     <Image Include="imgs\Wsquare.bmp">
       <Filter>Resource Files</Filter>
     </Image>
+    <Image Include="..\imgs\Wsquare.bmp">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="..\imgs\Bsquare.bmp">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="..\imgs\Rcheck.bmp">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="..\imgs\Wcheck.bmp">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="..\imgs\Wking.bmp">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="..\imgs\Rking.bmp">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="..\imgs\checkers.ico">
+      <Filter>Resource Files</Filter>
+    </Image>
   </ItemGroup>
 </Project>

@@ -25,7 +25,7 @@ struct SEngine
 	HistoryTable historyTable;
 
 	void Init(char* status_str);
-	void NewGame(const SBoard& startBoard);
+	void NewGame(const SBoard& startBoard, bool resetTranscript);
 	void MoveNow();
 	void StartThinking();
 	std::string GetInfoString();

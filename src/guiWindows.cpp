@@ -23,7 +23,7 @@ char g_buffer[32768];	// For PDN copying/pasting/loading/saving
 
 WindowsGUI winGUI;
 
-void OnNewGame(const SBoard& startBoard);
+void OnNewGame(const SBoard& startBoard, bool resetTranscript = true );
 
 // ------------------------------------
 // Initialize the GUI and the Engine
@@ -131,12 +131,12 @@ void DisplayText(const char* sText)
 
 void WindowsGUI::ShowErrorPopup(const char* text)
 {
-	MessageBox(winGUI.MainWnd, "Cannot Create Thread", "Error", MB_OK);
+	MessageBox(MainWnd, "Cannot Create Thread", "Error", MB_OK);
 }
 
 void WindowsGUI::UpdateMenuChecks()
 {
-	HMENU menu = GetMenu(winGUI.MainWnd);
+	HMENU menu = GetMenu(MainWnd);
 	CheckMenuItem(menu, ID_OPTIONS_BEGINNER, (engine.searchLimits.maxDepth == BEGINNER_DEPTH) ? MF_CHECKED : MF_UNCHECKED);
 	CheckMenuItem(menu, ID_OPTIONS_NORMAL, (engine.searchLimits.maxDepth == NORMAL_DEPTH) ? MF_CHECKED : MF_UNCHECKED);
 	CheckMenuItem(menu, ID_OPTIONS_EXPERT, (engine.searchLimits.maxDepth == EXPERT_DEPTH) ? MF_CHECKED : MF_UNCHECKED);
@@ -164,7 +164,7 @@ int WindowsGUI::TextToClipboard(const char* sText)
 	char* bufferPtr;
 	static HGLOBAL clipTranscript;
 	size_t nLen = strlen(sText);
-	if (OpenClipboard(winGUI.MainWnd) == TRUE) {
+	if (OpenClipboard(MainWnd) == TRUE) {
 		EmptyClipboard();
 		clipTranscript = GlobalAlloc(GMEM_DDESHARE | GMEM_MOVEABLE, nLen + 10);
 		bufferPtr = (char*)GlobalLock(clipTranscript);
@@ -234,16 +234,15 @@ void WindowsGUI::SetComputerColor(eColor Color)
 	UpdateMenuChecks();
 }
 
-void OnNewGame(const SBoard& startBoard)
+void OnNewGame(const SBoard& startBoard, bool resetTranscript )
 {
-	engine.NewGame(startBoard);
+	engine.NewGame(startBoard, resetTranscript);
 
 	winGUI.SetComputerColor(WHITE);
 
 	winGUI.nSelSquare = NO_SQUARE;
 	winGUI.nDouble = 0;
 
-	DisplayText("The Game Begins...");
 	winGUI.DrawBoard(engine.board);
 }
 
@@ -447,26 +446,6 @@ void WindowsGUI::DrawBoard(const SBoard& board)
 	ReleaseDC(MainWnd, hdc);
 }
 
-// ------------------
-// Replay Game from Game Move History up to nMove
-// ------------------
-void ReplayGame(Transcript& transcript, SBoard& Board)
-{
-	Board = transcript.startBoard;
-
-	int i = 0;
-	while (transcript.moves[i].data != 0 && i < transcript.numMoves) {
-		engine.boardHashHistory[i] = Board.HashKey;
-		Board.DoMove(transcript.moves[i]);
-		i++;
-	}
-
-	transcript.numMoves = i;
-
-	winGUI.nSelSquare = NO_SQUARE;
-	winGUI.nDouble = 0;
-}
-
 // --------------------
 // GetFileName - get a file name using common dialog
 // --------------------
@@ -474,7 +453,7 @@ static unsigned char sSaveGame[] = "Checkers Game (*.pdn)\0*.pdn\0\0";
 
 static BOOL GetFileName(HWND hwnd, BOOL save, char* fname, unsigned char* filterList)
 {
-	OPENFILENAME of; // FIXME : why doesn't this work?
+	OPENFILENAME of;
 	int rc;
 
 	memset(&of, 0, sizeof(OPENFILENAME));
@@ -500,44 +479,15 @@ static BOOL GetFileName(HWND hwnd, BOOL save, char* fname, unsigned char* filter
 // ------------------
 // File I/O... these are actually win GUI specific
 // ------------------
-void SaveGame(char* sFilename)
-{
-	FILE* pFile = fopen(sFilename, "wb");
-	if (pFile == NULL)
-		return;
-
-	const char* pdnText = engine.transcript.ToPDN().c_str();
-	fwrite(pdnText, 1, strlen(pdnText), pFile);
-
-	fclose(pFile);
-}
-
 void ReadPDNFromBuffer(const char* buffer)
 {
 	OnNewGame(SBoard::StartPosition());
 	engine.transcript.FromPDN(buffer);
 
-	ReplayGame(engine.transcript, engine.board);
+	engine.transcript.ReplayGame(engine.board, engine.boardHashHistory);
 
 	winGUI.DrawBoard(engine.board);
 	DisplayText(buffer);
-}
-
-void LoadGame(char* sFilename)
-{
-	FILE* pFile = fopen(sFilename, "rb");
-	if (pFile)
-	{
-		int x = 0;
-		while (x < 32000 && !feof(pFile)) {
-			g_buffer[x++] = getc(pFile);
-		}
-
-		if (x > 0) { g_buffer[x - 1] = 0; }
-		fclose(pFile);
-
-		ReadPDNFromBuffer(g_buffer);
-	}
 }
 
 //
@@ -585,12 +535,12 @@ int WindowsGUI::GetSquare(int& x, int& y)
 	return x + y * 8;
 }
 
-void WindowsGUI::DisplayEvaluation()
+void WindowsGUI::DisplayEvaluation(const SBoard& board)
 {
-	int Eval = -engine.board.EvaluateBoard(0, g_searchInfo.databaseNodes);
+	int Eval = -board.EvaluateBoard(0, g_searchInfo.databaseNodes);
 
 	std::string databaseBuffer;
-	if (abs(Eval) != 2001 && engine.dbInfo.InDatabase(engine.board))
+	if (abs(Eval) != 2001 && engine.dbInfo.InDatabase(board))
 	{
 		if (engine.dbInfo.type == dbType::WIN_LOSS_DRAW)
 		{
@@ -605,7 +555,7 @@ void WindowsGUI::DisplayEvaluation()
 		}
 
 		if (engine.dbInfo.type == dbType::EXACT_VALUES) {
-			int result = QueryEdsDatabase(engine.board, 0);
+			int result = QueryEdsDatabase(board, 0);
 			if (result == 0)
 				databaseBuffer = "DRAW";
 			if (result > MIN_WIN_SCORE) {
@@ -617,15 +567,15 @@ void WindowsGUI::DisplayEvaluation()
 		}
 	}
 
-	if (engine.board.SideToMove == BLACK) Eval = -Eval;
+	if (board.SideToMove == BLACK) Eval = -Eval;
 
 	snprintf(g_buffer, sizeof(g_buffer),
 		"Eval: %d\nWhite : %d   Red : %d\n%s %s",
 		Eval,
-		engine.board.numPieces[WHITE],
-		engine.board.numPieces[BLACK],
+		board.numPieces[WHITE],
+		board.numPieces[BLACK],
 		databaseBuffer.c_str(),
-		Repetition(engine.board.HashKey, 0, engine.transcript.numMoves) ? "(Repetition)" : "");
+		Repetition(board.HashKey, 0, engine.transcript.numMoves) ? "(Repetition)" : "");
 
 	DisplayText(g_buffer);
 }
@@ -756,7 +706,7 @@ void WindowsGUI::KeyboardCommands(int key)
 	}
 	if (key == 'E')
 	{
-		DisplayEvaluation();
+		DisplayEvaluation( engine.board );
 	}
 	if (key == 'T')
 	{
@@ -774,13 +724,12 @@ void WindowsGUI::KeyboardCommands(int key)
 // ===============================================
 // Process messages to the Bottom Window
 // ===============================================
-
 void SetTranscriptPosition( int newPos )
 {
 	engine.MoveNow(); // Stop thinking
 
 	engine.transcript.numMoves = std::max( newPos, 0 );
-	ReplayGame(engine.transcript, engine.board);
+	engine.transcript.ReplayGame(engine.board, engine.boardHashHistory);
 
 	winGUI.DrawBoard(engine.board);
 	SetFocus(winGUI.MainWnd);
@@ -788,7 +737,8 @@ void SetTranscriptPosition( int newPos )
 
 INT_PTR CALLBACK WindowsGUI::InfoProc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam)
 {
-	switch (msg) {
+	switch (msg) 
+	{
 	case WM_COMMAND:
 		switch (LOWORD(wparam)) {
 		case IDC_TAKEBACK:
@@ -796,7 +746,7 @@ INT_PTR CALLBACK WindowsGUI::InfoProc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM
 			break;
 
 		case IDC_PREV:
-			SetTranscriptPosition(engine.transcript.numMoves - 1);;
+			SetTranscriptPosition(engine.transcript.numMoves - 1);
 			break;
 
 		case IDC_NEXT:
@@ -822,10 +772,10 @@ INT_PTR CALLBACK WindowsGUI::InfoProc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM
 	return(0);
 }
 
-// ==============================================================
+// ===============================================
 //  Level Select Dialog Procedure
-// ==============================================================
-INT_PTR CALLBACK LevelDlgProc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM /*lparam*/)
+// ===============================================
+INT_PTR CALLBACK WindowsGUI::LevelDlgProc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM /*lparam*/)
 {
 	switch (msg) {
 	case WM_INITDIALOG:
@@ -850,9 +800,9 @@ INT_PTR CALLBACK LevelDlgProc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM /*lpara
 	return FALSE;
 }
 
-//
+// ===============================================
 // Process a command message
-//
+// ===============================================
 void WindowsGUI::ProcessCommand(WORD cmd, HWND hwnd)
 {
 	switch (cmd)
@@ -907,17 +857,20 @@ void WindowsGUI::ProcessCommand(WORD cmd, HWND hwnd)
 
 	case ID_FILE_SAVEGAME:
 	{
-		char filename[2048];
-		if (GetFileName(hwnd, 1, filename, sSaveGame))
-			SaveGame(filename);
+		char filepath[2048];
+		if (GetFileName(hwnd, 1, filepath, sSaveGame))
+			engine.transcript.Save(filepath);
 		break;
 	}
 
 	case ID_FILE_LOADGAME:
 	{
-		char filename[2048];
-		if (GetFileName(hwnd, 0, filename, sSaveGame))
-			LoadGame(filename);
+		char filepath[2048];
+		if (GetFileName(hwnd, 0, filepath, sSaveGame)) {
+			if (engine.transcript.Load(filepath)) {
+				OnNewGame( engine.transcript.startBoard, false );
+			}
+		}
 		break;
 	}
 
@@ -962,7 +915,7 @@ void WindowsGUI::ProcessCommand(WORD cmd, HWND hwnd)
 
 	case ID_DEVELOPER_EXPORT_TRAINING_SET:
 		DisplayText("Exporting training Sets...");
-		CreateTrainingSet();
+		NeuralNetLearner::CreateTrainingSet();
 		DisplayText("Export Training Sets Done!");
 		break;
 
@@ -970,7 +923,7 @@ void WindowsGUI::ProcessCommand(WORD cmd, HWND hwnd)
 	{
 		DisplayText("Import Latest Matches");
 		MatchResults results;
-		int numFiles = ImportLatestMatches(results);
+		int numFiles = NeuralNetLearner::ImportLatestMatches(results);
 		char buffer[1024];
 		snprintf(buffer, sizeof(buffer), "Imported %d files.\nW-L-D : %d-%d-%d  (%.1f%%)\n%.1f elo\n", numFiles, results.wins, results.losses, results.draws, results.Percent() * 100.0f, results.EloDiff());
 		DisplayText(buffer);
@@ -978,7 +931,6 @@ void WindowsGUI::ProcessCommand(WORD cmd, HWND hwnd)
 	}
 	}
 }
-
 
 // ===============================================
 // Process messages to the MAIN Window

@@ -75,9 +75,9 @@ BEGIN
     END
     POPUP "&Level"
     BEGIN
-        MENUITEM "&Beginner",                   ID_OPTIONS_BEGINNER
-        MENUITEM "&Advanced",                   ID_OPTIONS_NORMAL
-        MENUITEM "&Expert",                     ID_OPTIONS_EXPERT
+        MENUITEM "&2-ply",                      ID_OPTIONS_BEGINNER
+        MENUITEM "&8-ply",                      ID_OPTIONS_NORMAL
+        MENUITEM "&Full Strength",              ID_OPTIONS_EXPERT
         MENUITEM SEPARATOR
         MENUITEM "&User-defined level",         ID_OPTIONS_CUSTOMLEVEL
         MENUITEM SEPARATOR

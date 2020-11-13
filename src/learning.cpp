@@ -12,7 +12,7 @@
 #include "engine.h"
 #include "learning.h"
 
-void WriteNetInputsBinary(FILE* fp, nnInt_t InputValues[], int32_t inputCount)
+void NeuralNetLearner::WriteNetInputsBinary(FILE* fp, nnInt_t InputValues[], int32_t inputCount)
 {
 	const int kMaxBufferSize = 4096;
 	assert(inputCount < kMaxBufferSize);
@@ -28,7 +28,7 @@ void WriteNetInputsBinary(FILE* fp, nnInt_t InputValues[], int32_t inputCount)
 	fwrite(&writeBuf, sizeof(uint8_t), inputCount, fp);
 }
 
-void ConvertGamesToPositions( std::vector<std::string> pdnFilenames, std::vector<TrainingPosition>& positionSet )
+void NeuralNetLearner::ConvertGamesToPositions( std::vector<std::string> pdnFilenames, std::vector<TrainingPosition>& positionSet )
 {
 	Transcript transcript;
 	char buffer[4192];
@@ -46,7 +46,7 @@ void ConvertGamesToPositions( std::vector<std::string> pdnFilenames, std::vector
 				while (fgets(line, sizeof(line), fp))
 				{
 					strcat(buffer, line);
-					// Read until a line beginning with "*" TODO : more robust handling of multiple games in PDN
+					// Read until a line beginning with "*"
 					if (strstr(line, "*")) {
 						break;
 					}
@@ -81,9 +81,9 @@ void ConvertGamesToPositions( std::vector<std::string> pdnFilenames, std::vector
 	}
 }
 
-void ExportTrainingSet(std::vector<TrainingPosition>& positionSet )
+void NeuralNetLearner::ExportTrainingSet(std::vector<TrainingPosition>& positionSet )
 {
-	// Export training data
+	// Export training data for each net, for all positions in the set the net is active for
 	for (auto net : engine.evalNets )
 	{
 		FILE* posFile = fopen(net->trainingPositionFile.c_str(), "wb");
@@ -127,7 +127,7 @@ void ExportTrainingSet(std::vector<TrainingPosition>& positionSet )
 	}
 }
 
-void CreateTrainingSet()
+void NeuralNetLearner::CreateTrainingSet()
 {
 	std::vector<TrainingPosition> positionSet;
 
@@ -145,7 +145,7 @@ void CreateTrainingSet()
 	ExportTrainingSet( positionSet );
 }
 
-int ImportLatestMatches(MatchResults& results)
+int NeuralNetLearner::ImportLatestMatches(MatchResults& results)
 {
 	std::string matchDir = "C:/Users/Jon/Documents/Martin Fierz/CheckerBoard/games/matches/";
 	std::vector<std::string> filenums = { "", "[1]", "[2]", "[3]", "[4]", "[5]", "[6]", "[7]", "[8]", "[9]", "[10]" };

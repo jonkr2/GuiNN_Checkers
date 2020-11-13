@@ -7,7 +7,7 @@
 #include "engine.h"
 
 // return eval relative to board.SideToMove
-int SBoard::EvaluateBoard(int ahead, uint64_t& databaseNodes )
+int SBoard::EvaluateBoard(int ahead, uint64_t& databaseNodes ) const
 {
 	// Game is over?        
 	if ((numPieces[WHITE] == 0 && SideToMove == WHITE) || (numPieces[BLACK] == 0 && SideToMove == BLACK)) {
@@ -49,8 +49,8 @@ int SBoard::EvaluateBoard(int ahead, uint64_t& databaseNodes )
 	}
 	else
 	{
+		// NEURAL NET EVAL : Look for which neural net is active, and get the board evaluation from that one.
 		static alignas(64) nnInt_t nnValues[1024]; // TEMP : to thread should have values in threadData struct
-		// Look for which neural net is active, and get the board evaluation from that one.
 		for (auto net : engine.evalNets )
 		{
 			if (net->IsActive(*this)) {
@@ -73,7 +73,7 @@ int SBoard::EvaluateBoard(int ahead, uint64_t& databaseNodes )
 // For 1. won positions in database 2. positions with all kings to help finish the game. 
 // (TODO? Could train a small net to handle this using some distance to win metric in targetVal.)
 // (TODO? generalize to use for any lop-sided position that should be easy win.)
-int SBoard::FinishingEval()
+int SBoard::FinishingEval() const
 {
 	const uint32_t WK = Bitboards.K & Bitboards.P[WHITE];
 	const uint32_t BK = Bitboards.K & Bitboards.P[BLACK];

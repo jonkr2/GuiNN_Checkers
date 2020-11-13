@@ -72,11 +72,8 @@ int QuiesceBoard( int ply, int alpha, int beta )
         int value = -QuiesceBoard( ply+1, -beta, -alpha);
 
 		// Keep Track of Best Move and Alpha-Beta Prune
-		if (value > alpha )
-		{
-			alpha = value;
-			if (alpha >= beta ) return beta;
-		}
+		if (value >= beta) { return beta; }
+		if (value > alpha ) { alpha = value; }
 	}
 
 	return alpha;
@@ -174,7 +171,7 @@ int ABSearch( int32_t ply, int32_t depth, int32_t alpha, int32_t beta, bool isPV
 			g_searchInfo.searchingMove = movesSearched;
 
 			// On dramatic changes (such as fail lows) make sure to finish the iteration
-			const int newEval = color == WHITE ? alpha : -alpha; // eval from red's POV
+			const int newEval = (color == WHITE) ? alpha : -alpha; // eval from red's POV
 			if (abs(newEval) < 3000)
 			{
 				if (abs(newEval - g_searchInfo.eval) >= 26) engine.searchLimits.panicExtraMult = 1.8f;
@@ -186,15 +183,15 @@ int ABSearch( int32_t ply, int32_t depth, int32_t alpha, int32_t beta, bool isPV
 			}
 		}
 			 
-		// Reset the board to the one it was called with, then play the move
+		// Play the move (after resetting board to the one from previous ply)
         board = g_stack[ply-1].board;
 		const ePieceType movedPiece = board.GetPiece(move.Src());
         const int unreversible = board.DoMove( move );
+		g_searchInfo.nodes++;
 
 		engine.boardHashHistory[ engine.transcript.numMoves + ply] = board.HashKey;
 		searchedMoves[movesSearched++] = move;
 		g_stack[ply].historyMoveIdx = engine.historyTable.MoveIdx(move.Src(), move.Dir(0), movedPiece );
-		g_searchInfo.nodes++;
 
         // If the game is over after making this move, return a gameover value now
 		if (board.Bitboards.P[WHITE] == 0 || board.Bitboards.P[BLACK] == 0)
@@ -203,35 +200,38 @@ int ABSearch( int32_t ply, int32_t depth, int32_t alpha, int32_t beta, bool isPV
             return WinScore( ply );
         }
 
-        // If this is the max depth, quiesce (play jumps) then evaluate the position
 		int value = INVALID_VAL;
-		
+		int nextDepth = depth - 1;
+
+		// EXTENSIONS
+		if (moveList.numJumps > 0 &&
+			(isPV || (ply > 1 && g_stack[ply - 1].moveList.numJumps > 0)))
+			nextDepth++; // Any jump "recapture" or jump on PV
+		else if (nextDepth == 0 && board.Bitboards.GetJumpers(color))
+			nextDepth++; // On leaf when there is a jump threatened
+	
 		if (ply > 1 && board.reversibleMoves > 78 && board.Bitboards.GetJumpers(board.SideToMove) == 0) 
 		{ 
 			value = 0;  // draw by 40-move rule value.. Not sure actual rules checkerboard calls draws this way sometimes though
 		}
-		else if (depth >= 2 && ply > 1 && Repetition(board.HashKey, engine.transcript.numMoves - 24, engine.transcript.numMoves + ply))
+		else if (nextDepth >= 1 && ply > 1 && Repetition(board.HashKey, engine.transcript.numMoves - 24, engine.transcript.numMoves + ply))
 		{
-			value = 0; 	// If this is the reptition of a position that has occured already in the search, return a draw score
+			value = 0; 	// If this is the repetition of a position that has occured already in the search, return a draw score
 		}
-		else if ( (depth <= 1 || ply >= MAX_SEARCHDEPTH) )
+		else if ( (nextDepth <= 0 || ply >= MAX_SEARCHDEPTH) )
 		{
+			// quiesce (play jumps) then evaluate the position
 			value = -QuiesceBoard( ply+1, -beta, -alpha );
 	    }
-        // If this isn't the max depth continue to look ahead 
         else 
 		{	
+			// If this isn't the max depth continue to look ahead 
 			SMove nextBestmove = NO_MOVE;
-			int nextDepth = depth - 1;
-
-			// EXTENSION : Any jump "recapture" or jump on PV
-			if ( moveList.numJumps > 0 && 
-				(isPV || (ply > 1 && g_stack[ply - 1].moveList.numJumps > 0)) ) nextDepth++;
 
 		   	// TRANSPOSITION TABLE : Look up the this Position and check for value or bestMove
 			TEntry* ttEntry = nullptr;
 			int boardEval = INVALID_VAL;
-			if (nextDepth > 1 && engine.bUseHashTable)
+			if (engine.bUseHashTable)
 			{
 				ttEntry = engine.TTable.GetEntry( board );
 				ttEntry->Read( board.HashKey, alpha, beta, nextBestmove, value, boardEval, nextDepth, ply);
@@ -272,10 +272,10 @@ int ABSearch( int32_t ply, int32_t depth, int32_t alpha, int32_t beta, bool isPV
             if (value == INVALID_VAL)
 			{
 				// 1-ply LMR when not on pv
-				const bool doLMR = !isPV && moveList.numJumps == 0 && movesSearched > 3;
+				const bool doLMR = !isPV && moveList.numJumps == 0 && movesSearched > 2;
 
 				// Principal Variation Search - if this isn't first move on PV, use a search window width of 1
-				if (!isPV && movesSearched > 1)
+				if (!isPV || movesSearched > 1)
 				{
 					const int pvsDepth = nextDepth - doLMR;
 					value = -ABSearch( ply + 1, pvsDepth, -(alpha + 1), -alpha, false, nextBestmove);
@@ -339,12 +339,9 @@ BestMoveInfo ComputerMove( SBoard &InBoard )
 	engine.ttAge = (engine.ttAge + 1) % 63; // fit into 6 bits to store in tt
 	CMoveList& moveList = g_stack[1].moveList;
 
-	// return if game is over
-	if (InBoard.numPieces[BLACK] == 0 || InBoard.numPieces[WHITE] == 0) return BestMoveInfo();
-
 	moveList.FindMoves(InBoard.SideToMove, InBoard.Bitboards);
 
-	if (moveList.numMoves == 0) return BestMoveInfo(); // game over
+	if (moveList.numMoves == 0) return BestMoveInfo();	// return if game is over
 
 	srand( (unsigned int)time(0) );
 	bestmove = moveList.Moves[ 0 ];
@@ -367,7 +364,7 @@ BestMoveInfo ComputerMove( SBoard &InBoard )
 	{
 		// Make sure the repetition tester has all the values needed.
 		if (!checkerBoard.bActive) {
-			ReplayGame(engine.transcript, InBoard);
+			engine.transcript.ReplayGame(InBoard, engine.boardHashHistory );
 		}
 
 		// Initialize search depth

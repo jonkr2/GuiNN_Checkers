@@ -524,6 +524,13 @@
     <None Include="guiCheckers.def" />
   </ItemGroup>
   <ItemGroup>
+    <Image Include="..\imgs\Bsquare.bmp" />
+    <Image Include="..\imgs\checkers.ico" />
+    <Image Include="..\imgs\Rcheck.bmp" />
+    <Image Include="..\imgs\Rking.bmp" />
+    <Image Include="..\imgs\Wcheck.bmp" />
+    <Image Include="..\imgs\Wking.bmp" />
+    <Image Include="..\imgs\Wsquare.bmp" />
     <Image Include="imgs\Bsquare.bmp" />
     <Image Include="imgs\checkers.ico" />
     <Image Include="imgs\Rcheck.bmp" />

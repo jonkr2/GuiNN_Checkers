@@ -25,5 +25,14 @@ struct MatchResults {
 	}
 };
 
-void CreateTrainingSet();
-int ImportLatestMatches(MatchResults& results);
+class NeuralNetLearner
+{
+public:
+	static void CreateTrainingSet();
+	static int ImportLatestMatches(MatchResults& results);
+
+private:
+	static void WriteNetInputsBinary(FILE* fp, nnInt_t InputValues[], int32_t inputCount);
+	static void ConvertGamesToPositions(std::vector<std::string> pdnFilenames, std::vector<TrainingPosition>& positionSet);
+	static void ExportTrainingSet(std::vector<TrainingPosition>& positionSet);
+};

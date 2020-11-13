@@ -83,10 +83,12 @@ void CheckersNet::InitNetwork()
 
 bool CheckersNet::IsActive(const SBoard& board) const
 {
+	if (board.Bitboards.GetCheckers() == 0) return false; // all kings uses hand-crafted "FinishingEval"
+
 	const int numPieces = board.numPieces[WHITE] + board.numPieces[BLACK];
 
 	eGamePhase boardPhase = eGamePhase::EARLY_GAME;
-	if (numPieces <= 6) boardPhase = eGamePhase::LATE_END_GAME; // TEST TODO : all kings uses FinishingEval, so might be better not to save the data
+	if (numPieces <= 6) boardPhase = eGamePhase::LATE_END_GAME; 
 	else if (numPieces <= 8) boardPhase = eGamePhase::END_GAME;
 	else if (board.Bitboards.K) boardPhase = eGamePhase::MID_GAME;
 

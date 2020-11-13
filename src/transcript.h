@@ -26,7 +26,11 @@ struct Transcript
 	std::string ToPDN();
 	int FromPDN(const char* sPDN, float* gameResult = nullptr );
 	int MakeMovePDN(int src, int dst, SBoard& board);
+	void ReplayGame(SBoard& board, uint64_t boardHashHistory[]);
 	static std::string GetMoveString(const SMove& move);
+	bool Save(const char* filepath);
+	bool Load(const char* filepath);
+
 
 	SBoard startBoard;
 	SMove moves[MAX_GAMEMOVES];
