@@ -3405,7 +3405,7 @@ int inline AddPiecesFlipped( unsigned char piece[6], int &piece_count, uint32_t 
 	return numType;
 }
 
-int QueryEdsDatabase( const SBoard &Board, int ahead )
+int QueryEdsDatabase( const Board &Board, int ahead )
 {
 	unsigned char which_db, which_slice;
 	unsigned long long index_function_value;
@@ -3418,7 +3418,7 @@ int QueryEdsDatabase( const SBoard &Board, int ahead )
 	// 1. dominant side first (white first if equal)
 	// 2. kings first
 	// 3. lower square first, 
-	if ( Board.SideToMove == WHITE )
+	if ( Board.sideToMove == WHITE )
 	{
 		if ( Board.numPieces[WHITE] >= Board.numPieces[BLACK])
 		{
@@ -3438,7 +3438,7 @@ int QueryEdsDatabase( const SBoard &Board, int ahead )
 	else
 	{
 		// need to "flop" everything if red to move
-		const SCheckerBitboards& Bb = Board.Bitboards;
+		const CheckerBitboards& Bb = Board.Bitboards;
 		if ( Board.numPieces[WHITE] > Board.numPieces[BLACK])
 		{
 			red_king_count = AddPiecesFlipped ( piece, piece_count, Bb.P[WHITE] & Bb.K );
@@ -3543,7 +3543,7 @@ int QueryEdsDatabase( const SBoard &Board, int ahead )
 	
 	int eval = 2001 - distance_to_win_or_lose_or_possibly_draw - ahead;
 
-	if ( Board.SideToMove != WHITE ) // We flipped boards, flip the eval too
+	if ( Board.sideToMove != WHITE ) // We flipped boards, flip the eval too
 		eval = -eval;
 
 	if ( (distance_to_win_or_lose_or_possibly_draw & 1) == 0 ) // even number == opponent win

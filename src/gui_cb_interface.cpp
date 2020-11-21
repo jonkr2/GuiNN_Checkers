@@ -90,21 +90,21 @@ int WINAPI getmove
 	struct CBmove* move
 )
 {
-	static SBoard oldBoard;
+	static Board oldBoard;
 	static int numDrawScoreMoves = 0;
 
 	if (info & CB_RESET_MOVES) {
-		engine.board = SBoard::StartPosition();
+		engine.board = Board::StartPosition();
 		engine.transcript.Init( engine.board );
 	}
 	checkerBoard.infoString = str;
 	checkerBoard.pbPlayNow = playnow;
 
 	for (int i = 0; i < 64; i++)
-		engine.board.SetPiece(BoardLoc[i], ConvertFromCB[board[i % 8][7 - i / 8]]);
+		engine.board.SetPiece(Board64to32[i], ConvertFromCB[board[i % 8][7 - i / 8]]);
 
 	/* Convert CheckerBoard color to Gui Checkers color. */
-	engine.board.SideToMove = (color == CB_WHITE) ? WHITE : BLACK;
+	engine.board.sideToMove = (color == CB_WHITE) ? WHITE : BLACK;
 	engine.board.SetFlags();
 
 	if (!checkerBoard.bActive)
@@ -129,8 +129,7 @@ int WINAPI getmove
 		*/
 
 		numDrawScoreMoves = 0;
-		engine.transcript.Init( engine.board );
-		engine.historyTable.Clear();
+		engine.NewGame(engine.board, true);
 	}
 
 	// We get only get a new board, so add the board to repetition history
@@ -144,8 +143,8 @@ int WINAPI getmove
 
 	SetSearchTimeLimits( maxtime, info, moreinfo);
 
-	engine.computerColor = engine.board.SideToMove;
-	BestMoveInfo bestMove = ComputerMove(engine.board);
+	engine.computerColor = engine.board.sideToMove;
+	BestMoveInfo bestMove = ComputerMove(engine.board, engine.searchThreadData);
 
 	if (bestMove.move != NO_MOVE)
 	{
@@ -156,8 +155,9 @@ int WINAPI getmove
 
 	// Update the board param so CheckerBoard knows what we played
 	for (int i = 0; i < 64; i++) {
-		if (BoardLoc[i] >= 0) {
-			board[i % 8][7 - i / 8] = ConvertToCB[engine.board.GetPiece(BoardLoc[i])];
+		int square32 = Board64to32[i];
+		if (square32 >= 0) {
+			board[i % 8][7 - i / 8] = ConvertToCB[engine.board.GetPiece(square32)];
 		}
 	}
 

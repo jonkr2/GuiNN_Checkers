@@ -7,7 +7,7 @@
 #define USE_SSE2 // I think all 64-bit PCs have SSE2, so no reason to turn this off
 // #define NO_POP_COUNT // for very old processors that have no hardware popcount instruction
 
-static const char* g_VersionName = "GuiNN Checkers 2.02";
+static const char* g_VersionName = "GuiNN Checkers 2.04";
 
 const int MAX_GAMEMOVES = 2048;
 const int INV = 33; // invalid square
@@ -29,15 +29,30 @@ const int MAX_SEARCHDEPTH = 120;
 const int MIN_WIN_SCORE = 1800;
 inline int WinScore(int ply) { return 2001 - ply; }
 inline int ClampInt(int i, int min, int max) { return (i < min) ? min : (i > max) ? max : i; }
+inline int SQ(int x, int y) { return y * 8 + x; }
 
-// For extern Checkerboard interface
-struct SCheckerboardInterface
+const int NUM_BOARD_SQUARES = 32;
+const int NUM_PIECE_TYPES = 12; // not really 12 but this is what TT was at. Check what is actually needed.
+
+// TODO : where to put this?
+// Aligned malloc and free for MSVC and GCC
+template<typename T>
+inline T* AlignedAllocUtil(size_t count, size_t align)
 {
-	bool bActive = false;
-	int* pbPlayNow = nullptr;
-	char* infoString = nullptr;
-	int useOpeningBook = 1;
-	char db_path[260] = "db_dtw";
-	int enable_wld = 1;
-};
-extern SCheckerboardInterface checkerBoard;
+#ifdef __GNUC__
+	return (T*)aligned_alloc(align, count * sizeof(T));
+#else
+	return (T*)_aligned_malloc(count * sizeof(T), align);
+#endif
+}
+
+inline void AlignedFreeUtil(void* data)
+{
+#ifdef __GNUC__
+	free(data);
+#else
+	_aligned_free(data);
+#endif
+}
+
+typedef int16_t nnInt_t;

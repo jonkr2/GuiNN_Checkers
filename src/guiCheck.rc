@@ -67,11 +67,11 @@ BEGIN
     BEGIN
         MENUITEM "Position &Edit",              ID_EDIT_SETUPBOARD
         MENUITEM SEPARATOR
-        MENUITEM "&Copy FEN to clipboard\t(c)", ID_EDIT_COPY_POS
-        MENUITEM "&Paste FEN from clipboard\t(v)", ID_EDIT_PASTE_POS
+        MENUITEM "&Copy Position to clipboard\t(c)", ID_EDIT_COPY_POS
+        MENUITEM "&Paste Position from clipboard\t(v)", ID_EDIT_PASTE_POS
         MENUITEM SEPARATOR
-        MENUITEM "Copy PDN to clipboard\t(ctrl+c)", ID_EDIT_COPY_PDN
-        MENUITEM "Paste PDN from clipboard\t(ctrl+v)", ID_EDIT_PASTE_PDN
+        MENUITEM "Copy Transcript to clipboard\t(ctrl+c)", ID_EDIT_COPY_TRANSCRIPT
+        MENUITEM "Paste Transcript from clipboard\t(ctrl+v)", ID_EDIT_PASTE_TRANSCRIPT
     END
     POPUP "&Level"
     BEGIN
@@ -98,11 +98,9 @@ BEGIN
         MENUITEM "Computer Black",              ID_OPTIONS_COMPUTERBLACK
         MENUITEM "Computer White",              ID_OPTIONS_COMPUTERWHITE
     END
-    POPUP "Developer"
+    POPUP "&Developer"
     BEGIN
-        MENUITEM "Import Latest Matches",       ID_DEVELOPER_IMPORTLATESTMATCHES
-        MENUITEM "Export Training Set",         ID_DEVELOPER_EXPORT_TRAINING_SET
-        MENUITEM "Save Binary Nets",            ID_DEVELOPER_SAVE_BINARY_NETS
+        MENUITEM SEPARATOR
     END
 END
 
@@ -114,9 +112,9 @@ BEGIN
     END
     POPUP "&Edit"
     BEGIN
-        MENUITEM "&Copy FEN to clipboard",      ID_EDIT_COPY_POS
+        MENUITEM "&Copy Position to clipboard",      ID_EDIT_COPY_POS
         MENUITEM SEPARATOR
-        MENUITEM "Copy PDN to clipboard",       ID_EDIT_COPY_PDN
+        MENUITEM "Copy Transcript to clipboard",       ID_EDIT_COPY_TRANSCRIPT
     END
     POPUP "&Level"
     BEGIN
@@ -161,11 +159,11 @@ RKING                   BITMAP                  "../imgs/Rking.bmp"
 // Dialog
 //
 
-BOTWND DIALOGEX 0, 0, 459, 43
+BOTWND DIALOGEX 0, 0, 459, 56
 STYLE DS_SETFONT | WS_CHILD | WS_VISIBLE
 FONT 8, "MS Sans Serif", 0, 0, 0x1
 BEGIN
-    LTEXT           "",150,7,2,246,38
+    LTEXT           "",150,7,2,246,51
     PUSHBUTTON      "<|",IDC_START,255,18,19,14
     PUSHBUTTON      "|>",IDC_END,326,18,19,14
     PUSHBUTTON      "<",IDC_PREV,276,18,23,14
@@ -201,7 +199,7 @@ BEGIN
         LEFTMARGIN, 7
         RIGHTMARGIN, 453
         TOPMARGIN, 2
-        BOTTOMMARGIN, 40
+        BOTTOMMARGIN, 53
     END
 
     "LEVELWND", DIALOG

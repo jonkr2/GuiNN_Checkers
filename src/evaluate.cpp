@@ -6,24 +6,24 @@
 
 #include "engine.h"
 
-// return eval relative to board.SideToMove
-int SBoard::EvaluateBoard(int ahead, uint64_t& databaseNodes ) const
+// return eval relative to board.sideToMove
+int Board::EvaluateBoard(int ply, SearchThreadData& search, const EvalNetInfo& netInfo ) const
 {
 	// Game is over?        
-	if ((numPieces[WHITE] == 0 && SideToMove == WHITE) || (numPieces[BLACK] == 0 && SideToMove == BLACK)) {
-		return -WinScore( ahead );
+	if ((numPieces[WHITE] == 0 && sideToMove == WHITE) || (numPieces[BLACK] == 0 && sideToMove == BLACK)) {
+		return -WinScore(ply);
 	}
 
 	// Exact database value?
 	if (engine.dbInfo.type == dbType::EXACT_VALUES && engine.dbInfo.InDatabase(*this))
 	{
-		int value = QueryEdsDatabase(*this, ahead);
+		int value = QueryEdsDatabase(*this, ply);
 
 		if (value != INVALID_DB_VALUE)
 		{
 			// If we get an exact score from the database we want to return right away
-			databaseNodes++;
-			return (SideToMove == WHITE) ? value : -value;
+			search.displayInfo.databaseNodes++;
+			return (sideToMove == WHITE) ? value : -value;
 		}
 	}
 
@@ -37,7 +37,7 @@ int SBoard::EvaluateBoard(int ahead, uint64_t& databaseNodes ) const
 
 		int Result = QueryGuiDatabase(*this);
 		if (Result <= 2) {
-			databaseNodes++;
+			search.displayInfo.databaseNodes++;
 			if (Result == dbResult::WHITEWIN) eval += 400;
 			if (Result == dbResult::BLACKWIN) eval -= 400;
 			if (Result == dbResult::DRAW) return 0;
@@ -49,15 +49,10 @@ int SBoard::EvaluateBoard(int ahead, uint64_t& databaseNodes ) const
 	}
 	else
 	{
-		// NEURAL NET EVAL : Look for which neural net is active, and get the board evaluation from that one.
-		static alignas(64) nnInt_t nnValues[1024]; // TEMP : to thread should have values in threadData struct
-		for (auto net : engine.evalNets )
-		{
-			if (net->IsActive(*this)) {
-				eval = net->GetNNEval(*this, nnValues);
-				break;
-			}
-		}
+		// NEURAL NET EVAL
+		assert(netInfo.firstLayerValues && netInfo.netIdx >= 0);
+		eval = engine.evalNets[netInfo.netIdx]->GetNNEvalIncremental(netInfo.firstLayerValues, search.nnValues);
+		eval = -SoftClamp(eval / 3, 400, 800); // move it into a better range with rest of evaluation
 
 		// surely winning material advantage?
 		if (numPieces[WHITE] >= numPieces[BLACK] + 2)
@@ -66,14 +61,14 @@ int SBoard::EvaluateBoard(int ahead, uint64_t& databaseNodes ) const
 			eval -= (numPieces[WHITE] == 1) ? 150 : 50;
 	}
 
-	// return SideToMove relative eval
-	return (SideToMove == WHITE) ? eval : -eval;
+	// return sideToMove relative eval
+	return (sideToMove == WHITE) ? eval : -eval;
 }
 
 // For 1. won positions in database 2. positions with all kings to help finish the game. 
 // (TODO? Could train a small net to handle this using some distance to win metric in targetVal.)
 // (TODO? generalize to use for any lop-sided position that should be easy win.)
-int SBoard::FinishingEval() const
+int Board::FinishingEval() const
 {
 	const uint32_t WK = Bitboards.K & Bitboards.P[WHITE];
 	const uint32_t BK = Bitboards.K & Bitboards.P[BLACK];

@@ -21,7 +21,7 @@
 
 #include "engine.h"
 
-void SBoard::Clear( )
+void Board::Clear( )
 {
 	Bitboards.P[BLACK] = 0;
 	Bitboards.P[WHITE] = 0;
@@ -30,7 +30,7 @@ void SBoard::Clear( )
 	SetFlags();
 }
 
-void SBoard::SetPiece(int sq, int piece)
+void Board::SetPiece(int sq, int piece)
 {
 	// Clear square first
 	Bitboards.P[WHITE] &= ~S[sq];
@@ -46,14 +46,14 @@ void SBoard::SetPiece(int sq, int piece)
 		Bitboards.K |= S[sq];
 }
 
-SBoard SBoard::StartPosition()
+Board Board::StartPosition()
 {
-	SBoard b;
+	Board b;
 	b.Clear();
 
 	b.Bitboards.P[BLACK] = RankMask(BLACK,1) | RankMask(BLACK, 2) | RankMask(BLACK, 3);
 	b.Bitboards.P[WHITE] = RankMask(WHITE,1) | RankMask(WHITE, 2) | RankMask(WHITE, 3);
-	b.SideToMove = BLACK;
+	b.sideToMove = BLACK;
 
 	b.SetFlags();
 	return b;
@@ -68,10 +68,10 @@ static inline uint32_t FlipBb( uint32_t bb )
 }
 
 // Rotate the board 180 and swap the colors
-SBoard SBoard::Flip()
+Board Board::Flip()
 {
-	SBoard ret;
-	ret.SideToMove = Opp(SideToMove);
+	Board ret;
+	ret.sideToMove = Opp(sideToMove);
 	ret.Bitboards.K = FlipBb(Bitboards.K);
 	ret.Bitboards.P[WHITE] = FlipBb(Bitboards.P[BLACK]);
 	ret.Bitboards.P[BLACK] = FlipBb(Bitboards.P[WHITE]);
@@ -79,23 +79,23 @@ SBoard SBoard::Flip()
 	return ret;
 }
 
-uint64_t SBoard::CalcHashKey()
+uint64_t Board::CalcHashKey()
 {
 	uint64_t CheckSum = 0;
 
 	for (int index = 0; index < 32; index++)
 	{
-		int nPiece = GetPiece(index);
-		if (nPiece != EMPTY) CheckSum ^= TranspositionTable::HashFunction[index][nPiece];
+		ePieceType piece = GetPiece(index);
+		if (piece != EMPTY) CheckSum ^= TranspositionTable::HashFunction[index][piece];
 	}
-	if (SideToMove == BLACK)
+	if (sideToMove == BLACK)
 	{
 		CheckSum ^= TranspositionTable::HashSTM;
 	}
 	return CheckSum;
 }
 
-void SBoard::SetFlags( )
+void Board::SetFlags( )
 {
 	numPieces[WHITE] = 0; 
 	numPieces[BLACK] = 0; 
@@ -113,24 +113,23 @@ void SBoard::SetFlags( )
 			numPieces[BLACK]++;
 		}
 	}
-	HashKey = CalcHashKey();
+	hashKey = CalcHashKey();
 }
 
 // ---------------------
 //  Helper Functions for DoMove 
 // ---------------------
-void inline SBoard::DoSingleJump( int src, int dst, const ePieceType piece, const eColor color )
+void inline Board::DoSingleJump( int src, int dst, const ePieceType piece, const eColor color )
 {
-	int jumpedSq = ((dst + src) >> 1 );
-	if ( S[jumpedSq] & MASK_ODD_ROW ) jumpedSq += 1; // correct for square number since the jumpedSq sometimes up 1 sometimes down 1 of the average
+	int jumpedSq = GetJumpSq(src, dst);
 
 	// Update Piece Count
 	numPieces[Opp(color)]--;
 
 	// Update Hash Key
 	const ePieceType jumpedPiece = GetPiece(jumpedSq);
-	HashKey ^= TranspositionTable::HashFunction[src][piece] ^ TranspositionTable::HashFunction[dst][piece];
-	HashKey	^= TranspositionTable::HashFunction[jumpedSq][jumpedPiece];
+	hashKey ^= TranspositionTable::HashFunction[src][piece] ^ TranspositionTable::HashFunction[dst][piece];
+	hashKey	^= TranspositionTable::HashFunction[jumpedSq][jumpedPiece];
 
 	// Update the bitboards
 	uint32_t BitMove = SqBit( src ) | SqBit( dst );
@@ -143,11 +142,11 @@ void inline SBoard::DoSingleJump( int src, int dst, const ePieceType piece, cons
 }
 
 // This function will test if a checker needs to be upgraded to a king, and upgrade if necessary
-void inline SBoard::CheckKing( const int dst, const ePieceType Piece )
+void inline Board::CheckKing( const int dst, const ePieceType piece )
 {
 	if ( dst <= 3 || dst >= 28 ) 
 	{
-		HashKey  ^= TranspositionTable::HashFunction[ dst ][Piece] ^ TranspositionTable::HashFunction[ dst ][ Piece | KING ];
+		hashKey  ^= TranspositionTable::HashFunction[ dst ][piece] ^ TranspositionTable::HashFunction[ dst ][piece | KING ];
 		Bitboards.K |= S[ dst ];
 	}
 }
@@ -156,17 +155,17 @@ void inline SBoard::CheckKing( const int dst, const ePieceType Piece )
 //  Execute a Move 
 //  Returns 1 if it's a non reversible move (anything but moving a king around.)
 // ---------------------
-int SBoard::DoMove( const SMove &Move )
+int Board::DoMove( const Move &Move )
 {
 	const int src = Move.Src();
 	int dst = Move.Dst();
 	const int jumpLen = Move.JumpLen();
 	const ePieceType piece = GetPiece(src);
-	const eColor color = SideToMove;
+	const eColor color = sideToMove;
 
-	// Flip SideToMove
-	SideToMove = Opp(SideToMove);
-	HashKey ^= TranspositionTable::HashSTM; 
+	// Flip sideToMove
+	sideToMove = Opp(sideToMove);
+	hashKey ^= TranspositionTable::HashSTM; 
 		
 	if (jumpLen == 0)
 	{
@@ -178,7 +177,7 @@ int SBoard::DoMove( const SMove &Move )
 		if (piece & KING) { Bitboards.K ^= BitMove; }
 
 		// Update hash values
-		HashKey ^= TranspositionTable::HashFunction[ src ][piece] ^ TranspositionTable::HashFunction[ dst ][piece];
+		hashKey ^= TranspositionTable::HashFunction[ src ][piece] ^ TranspositionTable::HashFunction[ dst ][piece];
 		
 		if (piece < KING) {
 			CheckKing(dst, piece);
@@ -218,9 +217,9 @@ int SBoard::DoMove( const SMove &Move )
 // ------------------
 int FlipSqX(int sq )
 {	
-	int y = sq&3;
-	sq ^= y;
-	sq += 3-y;
+	int x = sq&3;
+	sq ^= x;
+	sq += 3-x;
 	return sq;
 }
 
@@ -233,9 +232,9 @@ int StandardSquare( int sq )
 // ------------------
 // Position Copy & Paste Functions
 // ------------------
-std::string SBoard::ToFen()
+std::string Board::ToString()
 {	
-	std::string ret = (SideToMove == WHITE) ? "W:" : "B:";
+	std::string ret = (sideToMove == WHITE) ? "W:" : "B:";
 
 	ret += "W";
 	int pc = 0;
@@ -263,27 +262,27 @@ std::string SBoard::ToFen()
 	return ret;
 }
 
-int SBoard::FromFen( char *sFEN )
+int Board::FromString( char *text )
 {
 	int nColor = 0, i = 0;
-	while (sFEN[i] == ' ') i++;
-	if ((sFEN[i] != 'W' && sFEN[i]!='B') || sFEN[i+1]!=':') return 0;
+	while (text[i] == ' ') i++;
+	if ((text[i] != 'W' && text[i]!='B') || text[i+1]!=':') return 0;
 	Clear();
 
-	if (sFEN[i] == 'W') SideToMove = WHITE;
-	if (sFEN[i] == 'B') SideToMove = BLACK;
+	if (text[i] == 'W') sideToMove = WHITE;
+	if (text[i] == 'B') sideToMove = BLACK;
 
-	while (sFEN[i] != 0 && sFEN[i]!= '.' && sFEN[i-1]!= '.')
+	while (text[i] != 0 && text[i]!= '.' && text[i-1]!= '.')
 	{
 		int nKing = 0;
-		if (sFEN[i] == 'W') nColor = WPIECE;
-		if (sFEN[i] == 'B') nColor = BPIECE;
-		if (sFEN[i] == 'K') {nKing = 4; i++; }
-		if (sFEN[i] >= '0' && sFEN[i] <= '9')
+		if (text[i] == 'W') nColor = WPIECE;
+		if (text[i] == 'B') nColor = BPIECE;
+		if (text[i] == 'K') {nKing = 4; i++; }
+		if (text[i] >= '0' && text[i] <= '9')
 		{
-			int sq = sFEN[i]-'0';
+			int sq = text[i]-'0';
 			i++;
-			if (sFEN[i] >= '0' && sFEN[i] <= '9') sq = sq*10 + sFEN[i]-'0';
+			if (text[i] >= '0' && text[i] <= '9') sq = sq*10 + text[i]-'0';
 			SetPiece(FlipSqX(sq-1), nColor | nKing );
 		}
 		i++;

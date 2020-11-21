@@ -2,11 +2,10 @@
 // openingBook.cpp
 // by Jonathan Kreuzer
 //
-// The opening book is a hash table of positions and values indexed by Board.HashKey
+// The opening book is a hash table of positions and values indexed by Board.hashKey
 //
 
 #include <stdio.h>
-#include <time.h>
 #include <cmath>
 
 #include "engine.h"
@@ -17,10 +16,10 @@ COpeningBook* pOpeningBook = nullptr;
 // --------------------
 //  Opening Book functions
 // --------------------
-int COpeningBook::GetValue( SBoard &Board )
+int COpeningBook::GetValue( Board &Board )
 {
-	uint32_t key   = (uint32_t)Board.HashKey;
-	uint32_t checksum = (uint32_t)(Board.HashKey>>32);
+	uint32_t key   = (uint32_t)Board.hashKey;
+	uint32_t checksum = (uint32_t)(Board.hashKey>>32);
 	uint32_t entryIdx = key % BOOK_HASH_SIZE;
 	SBookEntry* pEntry = &m_pHash[entryIdx];
 
@@ -84,10 +83,10 @@ void COpeningBook::AddPosition( uint32_t key, uint32_t checksum, int16_t wValue,
 	}
 }
 
-void COpeningBook::AddPosition(SBoard& Board, int16_t value, bool bQuiet)
+void COpeningBook::AddPosition(Board& Board, int16_t value, bool bQuiet)
 {
-	uint32_t ulKey = (uint32_t)Board.HashKey;
-	uint32_t ulCheck = (uint32_t)(Board.HashKey >> 32);
+	uint32_t ulKey = (uint32_t)Board.hashKey;
+	uint32_t ulCheck = (uint32_t)(Board.hashKey >> 32);
 	AddPosition(ulKey, ulCheck, value, bQuiet);
 }
 
@@ -95,11 +94,11 @@ void COpeningBook::AddPosition(SBoard& Board, int16_t value, bool bQuiet)
 //  Remove a position from the book.
 //  (if this position is in the list, it stays in memory until the book is saved and loaded.)
 // --------------------
-void COpeningBook::RemovePosition( SBoard &Board, bool bQuiet )
+void COpeningBook::RemovePosition( Board &Board, bool bQuiet )
 {
 	char sTemp[255];
-	uint32_t key   = (uint32_t)Board.HashKey;
-	uint32_t checksum = (uint32_t)(Board.HashKey>>32);
+	uint32_t key   = (uint32_t)Board.hashKey;
+	uint32_t checksum = (uint32_t)(Board.hashKey>>32);
 	uint32_t entryIdx = key % BOOK_HASH_SIZE;
 	SBookEntry *pEntry = &m_pHash[entryIdx];
 	SBookEntry *pPrev = nullptr; 
@@ -197,23 +196,23 @@ int COpeningBook::Save( const char *sFileName )
 // --------------------
 // Find a book move by doing all legal moves, then checking to see if the position is in the opening book.
 // --------------------
-int COpeningBook::FindMoves( SBoard &Board, SMove OutMoves[], int16_t values[] )
+int COpeningBook::FindMoves( Board &board, Move OutMoves[], int16_t values[] )
 {
-	SBoard TempBoard;
-	CMoveList Moves;
-	Moves.FindMoves(Board.SideToMove, Board.Bitboards);
+	Board tempBoard;
+	MoveList moves;
+	moves.FindMoves(board);
 
 	int numFound = 0;
 
-	for (int i = 0; i < Moves.numMoves; i++)
+	for (int i = 0; i < moves.numMoves; i++)
 	{
-		TempBoard = Board;
-		TempBoard.DoMove( Moves.Moves[i] );
-		int val = GetValue( TempBoard );
+		tempBoard = board;
+		tempBoard.DoMove( moves.moves[i] );
+		int val = GetValue(tempBoard);
 		// Add move if it leads to a position in the book 
 		if ( val != BOOK_INVALID_VALUE)
 		{
-			OutMoves[numFound] = Moves.Moves[ i ];
+			OutMoves[numFound] = moves.moves[ i ];
 			values[numFound] = val;
 			numFound++;
 		}
@@ -225,34 +224,32 @@ int COpeningBook::FindMoves( SBoard &Board, SMove OutMoves[], int16_t values[] )
 // --------------------
 // Try to do a move in the opening book
 // --------------------
-int COpeningBook::GetMove( SBoard &Board, SMove& bestMove )
+int COpeningBook::GetMove( Board &Board, Move& bestMove )
 {
 	int nVal = BOOK_INVALID_VALUE, nMove = -1;
-	SMove Moves[ 60 ];
-	SMove GoodMoves[ 60 ];
+	Move moves[ 60 ];
+	Move GoodMoves[ 60 ];
 	int16_t Values[60], GoodValues[60];
 
-	int numBookMoves = FindMoves( Board, Moves, Values);
-
-	srand( (unsigned int)time( 0 ) ); // Randomize
+	int numBookMoves = FindMoves( Board, moves, Values);
 
 	int numGoodMoves = 0;
 	int maxValueFound = 0;
 	for (int i = 0; i < numBookMoves; i++)
 	{
-		 if ( (Board.SideToMove == BLACK && Values[i] <= 0) || (Board.SideToMove == WHITE && Values[i] >= 0) ){
+		 if ( (Board.sideToMove == BLACK && Values[i] <= 0) || (Board.sideToMove == WHITE && Values[i] >= 0) ){
 			if (abs(Values[i]) > maxValueFound) maxValueFound = abs(Values[i]);
 		}
 	}
 
 	for (int i = 0; i < numBookMoves; i++)
 	{
-		if ( (Board.SideToMove == BLACK && Values[i] <= 0) || (Board.SideToMove == WHITE && Values[i] >= 0) )
+		if ( (Board.sideToMove == BLACK && Values[i] <= 0) || (Board.sideToMove == WHITE && Values[i] >= 0) )
 		{
 			if (Values[i] != 0 || maxValueFound == 0)
 			{
 				GoodValues[numGoodMoves] = Values[i];
-				GoodMoves[numGoodMoves] = Moves[i];
+				GoodMoves[numGoodMoves] = moves[i];
 				numGoodMoves++;
 			}
 		}

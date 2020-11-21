@@ -16,17 +16,17 @@
 
 Transcript g_Transcript;
 
-// Convert transcript to PDN string in reference param sPDN
-std::string Transcript::ToPDN()
+// Convert transcript to PDN string and return that string
+std::string Transcript::ToString()
 {
 	std::stringstream text;
 	text << "[Event \"" << g_VersionName << " game\"]\015\012";
 
-	const char* sFEN = startBoard.ToFen().c_str();
-	if (strcmp(sFEN, "B:W24,23,22,21,28,27,26,25,32,31,30,29:B4,3,2,1,8,7,6,5,12,11,10,9.") != 0)
+	const char* boardStr = startBoard.ToString().c_str();
+	if (strcmp(boardStr, "B:W24,23,22,21,28,27,26,25,32,31,30,29:B4,3,2,1,8,7,6,5,12,11,10,9.") != 0)
 	{
 		text << "[SetUp \"1\"]\015\012";
-		text << "[FEN \"" << sFEN << "\"]\015\012";
+		text << "[FEN \"" << boardStr << "\"]\015\012";
 	}
 
 	for (int i = 0; i < numMoves && moves[i] != NO_MOVE; i++ )
@@ -54,20 +54,20 @@ void ReadResult( const char buffer[], float* gameResult)
 }
 
 // Convert param sPDN to a transcript
-int Transcript::FromPDN(const char* sPDN, float* gameResult )
+int Transcript::FromString(const char* sPDN, float* gameResult )
 {
 	int i = 0;
 	int nEnd = (int)strlen(sPDN);
 	int src = 0, dst = 0;
 	char sFEN[512];
-	SBoard tempBoard;
+	Board tempBoard;
 
-	Init(SBoard::StartPosition());
+	Init(Board::StartPosition());
 	tempBoard = startBoard;
 
 	while (i < nEnd)
 	{
-		// If we read a result, we're done with this game
+		// If we read a *, we're done with this game
 		if (sPDN[i] == '*') {
 			break;
 		}
@@ -80,7 +80,7 @@ int Transcript::FromPDN(const char* sPDN, float* gameResult )
 			while (sPDN[i] != '"' && i < nEnd) sFEN[x++] = sPDN[i++];
 			sFEN[x++] = 0;
 
-			startBoard.FromFen(sFEN);
+			startBoard.FromString(sFEN);
 			tempBoard = startBoard;
 		}
 
@@ -124,16 +124,16 @@ int Transcript::FromPDN(const char* sPDN, float* gameResult )
 }
 
 // Make a single move on this transcript from src to dst
-int Transcript::MakeMovePDN(int src, int dst, SBoard& board)
+int Transcript::MakeMovePDN(int src, int dst, Board& board)
 {
-	CMoveList Moves;
-	Moves.FindMoves(board.SideToMove, board.Bitboards);
+	MoveList moves;
+	moves.FindMoves(board);
 
-	for (int i = 0; i < Moves.numMoves; i++)
+	for (int i = 0; i < moves.numMoves; i++)
 	{
-		SMove move = Moves.Moves[i];
+		Move move = moves.moves[i];
 		if (move.Src() == src
-			&& (move.Dst() == dst || SMove::GetFinalDst(move) == dst))
+			&& (move.Dst() == dst || Move::GetFinalDst(move) == dst))
 		{
 			board.DoMove(move);
 			AddMove(move);
@@ -144,11 +144,11 @@ int Transcript::MakeMovePDN(int src, int dst, SBoard& board)
 	return 0;
 }
 
-std::string Transcript::GetMoveString(const SMove& move)
+std::string Transcript::GetMoveString(const Move& move)
 {
 	int src = StandardSquare(move.Src());
 	char cap = (move.JumpLen() > 0) ? 'x' : '-';
-	int dst = StandardSquare(SMove::GetFinalDst(move));
+	int dst = StandardSquare(Move::GetFinalDst(move));
 	return std::to_string(src) + cap + std::to_string(dst);
 }
 
@@ -157,7 +157,7 @@ bool Transcript::Save(const char* filepath)
 	std::ofstream file(filepath);
 	if (file.good())
 	{
-		file << ToPDN();
+		file << ToString();
 		file.close();
 		return true;
 	}
@@ -172,22 +172,22 @@ bool Transcript::Load(const char* filepath)
 		std::string content((std::istreambuf_iterator<char>(file)), std::istreambuf_iterator<char>()); // read the contents of file
 		file.close(); // close the file
 
-		FromPDN(content.c_str());
+		FromString(content.c_str());
 		return true;
 	}
 	return false;
 }
 
 // ------------------
-// Replay Game from Game Move History up to nMove
+// Replay Game from Game Move History up to numMoves
 // ------------------
-void Transcript::ReplayGame(SBoard& board, uint64_t boardHashHistory[] )
+void Transcript::ReplayGame(Board& board, uint64_t boardHashHistory[] )
 {
 	board = startBoard;
 
 	int i = 0;
 	while (moves[i].data != 0 && i < numMoves) {
-		boardHashHistory[i] = board.HashKey;
+		boardHashHistory[i] = board.hashKey;
 		board.DoMove(moves[i]);
 		i++;
 	}

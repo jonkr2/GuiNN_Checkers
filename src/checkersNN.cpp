@@ -15,6 +15,7 @@
 
 int InitializeNeuralNets()
 {
+	// Note : the enum values need to be in order for netIdx = (int)CheckersNet::GetGamePhase(board);
 	engine.evalNets.push_back(new CheckersNet("CheckersEarly", eGamePhase::EARLY_GAME));
 	engine.evalNets.push_back(new CheckersNet("CheckersMid", eGamePhase::MID_GAME));
 	engine.evalNets.push_back(new CheckersNet("CheckersEnd", eGamePhase::END_GAME));
@@ -74,30 +75,34 @@ void CheckersNet::InitNetwork()
 	blackInputCount = 32 + 28;
 
 	network.SetInputCount(whiteInputCount + blackInputCount + 1); // +1 for side-to-move
-	network.AddLayer(192, AT_RELU, LT_INPUT_TO_OUTPUTS);
-	network.AddLayer(32, AT_RELU);
-	network.AddLayer(32, AT_RELU);
-	network.AddLayer(1, AT_LINEAR);
+	network.AddLayer(192, eActivation::RELU, eLayout::INPUT_TO_OUTPUTS);
+	network.AddLayer(32, eActivation::RELU);
+	network.AddLayer(32, eActivation::RELU);
+	network.AddLayer(1, eActivation::LINEAR);
 	network.Build();
 }
 
-bool CheckersNet::IsActive(const SBoard& board) const
+eGamePhase CheckersNet::GetGamePhase(const Board& board)
 {
-	if (board.Bitboards.GetCheckers() == 0) return false; // all kings uses hand-crafted "FinishingEval"
-
 	const int numPieces = board.numPieces[WHITE] + board.numPieces[BLACK];
 
 	eGamePhase boardPhase = eGamePhase::EARLY_GAME;
-	if (numPieces <= 6) boardPhase = eGamePhase::LATE_END_GAME; 
+	if (numPieces <= 6) boardPhase = eGamePhase::LATE_END_GAME;
 	else if (numPieces <= 8) boardPhase = eGamePhase::END_GAME;
 	else if (board.Bitboards.K) boardPhase = eGamePhase::MID_GAME;
+	return boardPhase;
+}
 
-	return (gamePhase == boardPhase);
+bool CheckersNet::IsActive(const Board& board) const
+{
+	if (board.Bitboards.GetCheckers() == 0) return false; // all kings uses hand-crafted "FinishingEval"
+	
+	return (GetGamePhase(board) == gamePhase);
 }
 
 inline int RotateSq(int sq) { return 31 - sq; }
 
-void CheckersNet::ConvertToInputValues(const SBoard& board, nnInt_t Values[])
+void CheckersNet::ConvertToInputValues(const Board& board, nnInt_t Values[])
 {
 	NetworkTransform<nnInt_t>* transform = network.GetTransform(0);
 	nnInt_t* Inputs = Values;
@@ -108,7 +113,7 @@ void CheckersNet::ConvertToInputValues(const SBoard& board, nnInt_t Values[])
 	transform->SetOutputsToBias(Outputs);
 
 	// Set the inputs based on the board
-	for (eColor c : {BLACK, WHITE} ) // {board.SideToMove, Opp(board.SideToMove)}
+	for (eColor c : {BLACK, WHITE} ) // {board.sideToMove, Opp(board.sideToMove)}
 	{
 		uint32_t checkers = board.Bitboards.P[c] & ~board.Bitboards.K;
 		uint32_t kings = board.Bitboards.P[c] & board.Bitboards.K;
@@ -126,21 +131,54 @@ void CheckersNet::ConvertToInputValues(const SBoard& board, nnInt_t Values[])
 			transform->AddInput(start + 28 + sq, Inputs, Outputs);
 		}
 	}
-	if (board.SideToMove == BLACK) {
+	if (board.sideToMove == BLACK) {
 		transform->AddInput(whiteInputCount + blackInputCount, Inputs, Outputs);
 	}
-
-	// Apply activation function
-	transform->TransformActivateOnly(Outputs);
 }
 
-// Note : Values are passed to allow safe multi-threading
-int CheckersNet::GetNNEval(const SBoard& board, nnInt_t Values[])
+// Get which net input corresponds to piece on square
+int CheckersNet::GetInput(int sq, ePieceType piece) const
 {
-	ConvertToInputValues(board, Values); // Note : this also sets first layer values for each input
+	assert(piece == WKING || piece == BKING || piece == WPIECE || piece == BPIECE);
+	const eColor c = (piece & 2) ? WHITE : BLACK;
+	const uint32_t start = (c == WHITE) ? 0 : whiteInputCount;
+	if (c == BLACK) sq = RotateSq(sq);
 
-	int val = network.SumHiddenLayers(Values);
+	if (piece & KING) return start + 28 + sq;
+	return start + sq- 4;
+}
 
-	// Reduce value, and soft-clamp so values higher than max are greatly reduced
-	return -SoftClamp(val / 3, 400, 800);
+// Incrementally update the first-layer non-activated values of the net
+void CheckersNet::IncrementalUpdate(const Move& move, const Board& board, nnInt_t firstLayerValues[])
+{
+	NetworkTransform<nnInt_t>* transform = network.GetTransform(0);
+	int src = move.Src();
+	int dst = move.Dst();
+	const int jumpLen = move.JumpLen();
+	ePieceType movedPiece = board.GetPiece(src);
+
+	// remove the moved piece
+	transform->RemoveInput(GetInput(src, movedPiece), firstLayerValues);
+
+	// jump move removes jumped opponent pieces
+	if (jumpLen > 0)
+	{
+		int jumpedSq = board.GetJumpSq(src, dst);
+		transform->RemoveInput(GetInput(jumpedSq, board.GetPiece(jumpedSq)), firstLayerValues);
+		for (int i = 0; i < jumpLen - 1; i++)
+		{
+			src = dst;
+			dst += JumpAddDir[move.Dir(i)];
+			jumpedSq = board.GetJumpSq(src, dst);
+			transform->RemoveInput(GetInput(jumpedSq, board.GetPiece(jumpedSq)), firstLayerValues);
+		}
+	}
+
+	// add the movedPiece in the destination
+	if ( movedPiece < KING && (dst <= 3 || dst >= 28) ) movedPiece = ePieceType( movedPiece | KING );
+	transform->AddInput(GetInput(dst, movedPiece), firstLayerValues);
+
+	// toggle stm
+	if (board.sideToMove == WHITE) transform->AddInput(whiteInputCount + blackInputCount, firstLayerValues);
+	else transform->RemoveInput(whiteInputCount + blackInputCount, firstLayerValues);
 }

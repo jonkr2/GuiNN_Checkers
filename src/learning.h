@@ -4,9 +4,9 @@
 struct TrainingPosition
 {
 	TrainingPosition() {}
-	TrainingPosition(const SBoard& inBoard, float inTargetVal) : board(inBoard), targetVal(inTargetVal) {}
+	TrainingPosition(const Board& inBoard, float inTargetVal) : board(inBoard), targetVal(inTargetVal) {}
 
-	SBoard board;
+	Board board;
 	float targetVal;
 };
 
@@ -32,6 +32,7 @@ public:
 	static int ImportLatestMatches(MatchResults& results);
 
 private:
+	static void WriteNetStructure(const char* filePath, const NeuralNetwork<nnInt_t>& network);
 	static void WriteNetInputsBinary(FILE* fp, nnInt_t InputValues[], int32_t inputCount);
 	static void ConvertGamesToPositions(std::vector<std::string> pdnFilenames, std::vector<TrainingPosition>& positionSet);
 	static void ExportTrainingSet(std::vector<TrainingPosition>& positionSet);

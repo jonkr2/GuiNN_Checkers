@@ -11,9 +11,15 @@ struct CheckersNet : NeuralNetBase
 	}
 
 	void InitNetwork() override;
-	bool IsActive(const struct SBoard& board) const override;
-	int GetNNEval(const struct SBoard& board, nnInt_t Values[]) override;
-	void ConvertToInputValues(const struct SBoard& board, nnInt_t InputValues[]) override;
+	bool IsActive(const struct Board& board) const override;
+	void ConvertToInputValues(const struct Board& board, nnInt_t InputValues[]) override;
+
+	void IncrementalUpdate(const Move& move, const Board& board, nnInt_t firstLayerValues[]);
+
+	static eGamePhase GetGamePhase(const Board& board);
+
+private:
+	inline int GetInput(int sq, ePieceType piece) const;
 
 	eGamePhase gamePhase;
 };

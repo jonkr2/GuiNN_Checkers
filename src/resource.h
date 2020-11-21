@@ -33,8 +33,8 @@
 #define ID_Menu                         40025
 #define ID_OPTIONS_EXPERT               40026
 #define ID_OPTIONS_NORMAL               40027
-#define ID_EDIT_COPY_PDN                40028
-#define ID_EDIT_PASTE_PDN               40029
+#define ID_EDIT_COPY_TRANSCRIPT                40028
+#define ID_EDIT_PASTE_TRANSCRIPT               40029
 #define ID_OPTIONS_COMPUTERBLACK        40030
 #define ID_OPTIONS_COMPUTERWHITE        40031
 #define ID_GAME_MOVENOW                 40032

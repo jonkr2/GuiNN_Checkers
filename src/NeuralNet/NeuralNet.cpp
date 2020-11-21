@@ -20,6 +20,49 @@ void NeuralNetBase::SetFilenames(std::string name)
 	neuralNetFileBin = std::string("NN/") + name + std::string("Weights.bin");
 	trainingPositionFile = std::string("NN/") + name + std::string("Data.dat");
 	trainingLabelFile = std::string("NN/") + name + std::string("Labels.dat");
+	structureFile = std::string("NN/") + name + std::string("Struct.txt");
+}
+
+int NeuralNetBase::ComputeFirstLayerValues(const Board& board, nnInt_t* Values, nnInt_t* firstLayerValues)
+{
+	ConvertToInputValues(board, Values); // Note : this also sets first-layer values for each input
+
+	// Save the converted board values into first layer values for later
+	NetworkTransform<nnInt_t>* transform = network.GetTransform(0);
+	nnInt_t* Outputs = network.GetLayerOutputValues(0, Values);
+	memcpy(firstLayerValues, Outputs, sizeof(nnInt_t) * transform->outputCount);
+
+	return transform->outputCount;
+}
+
+// param firstLayerValues = the non-activated output values from the first layer
+int NeuralNetBase::GetNNEvalIncremental(const nnInt_t firstLayerValues[], nnInt_t Values[])
+{
+	nnInt_t* Outputs = network.GetLayerOutputValues(0, Values);
+	memcpy(Outputs, firstLayerValues, sizeof(nnInt_t) * network.GetLayer(0)->outputCount);
+
+	return GetNNEval(Values);
+}
+
+// param board = board to convert to inputs. 
+// Note : Values are passed to allow safe multi-threading
+int NeuralNetBase::GetNNEval(const Board& board, nnInt_t* Values)
+{
+	ConvertToInputValues(board, Values); // Note : this also sets first-layer values for each input
+
+	return GetNNEval(Values);
+}
+
+int NeuralNetBase::GetNNEval(nnInt_t* Values)
+{
+	assert(network.ValueMax() < kMaxEvalNetValues);
+
+	// Activation function on first layer
+	nnInt_t* Outputs = network.GetLayerOutputValues(0, Values);
+	network.GetTransform(0)->TransformActivateOnly(Outputs);
+
+	// Sum all the hidden layers
+	return network.SumHiddenLayers(Values);
 }
 
 template<typename T>
@@ -97,6 +140,21 @@ int32_t FloatToFixed(float v)
 }
 
 template<typename T>
+int NeuralNetwork<T>::LoadWeightIdx(uint32_t w) const
+{
+	for (uint32_t l = 0; l < layerCount; l++) {
+		if (w >= Transforms[l].weightStart && w < Transforms[l].weightStart + Transforms[l].WeightCount()) {
+			int n = w - Transforms[l].weightStart;
+			int x = n % Transforms[l].outputCount;
+			int y = n / Transforms[l].outputCount;
+
+			return Transforms[l].WeightIdx(y, x);
+		}
+	}
+	return w;
+}
+
+template<typename T>
 bool NeuralNetwork<T>::LoadText( const char* filename )
 {
 	FILE* fp = fopen(filename, "rb");
@@ -141,6 +199,7 @@ bool NeuralNetwork<T>::LoadText( const char* filename )
 					// assert(abs(Weights[LoadWeightIdx(i)] < (10 *256) ));
 				}
 			}
+			OnWeightsLoaded();
 			return true;
 		}
 	}
@@ -152,10 +211,12 @@ template<typename T>
 T NeuralNetwork<T>::Sum( T Values[] )
 {
 	// First layer inputs are probably sparsely set, so do it input->output
-	if (Layers[0].layoutType == LT_INPUT_TO_OUTPUTS)
-		Transforms[0].TransformInputToOutput(GetLayerOutputValues(-1, Values), GetLayerOutputValues(0, Values));
+	T* Inputs = &Values[0];
+	T* Outputs = GetLayerOutputValues(0, Values);
+	if (Layers[0].layoutType == eLayout::INPUT_TO_OUTPUTS)
+		Transforms[0].TransformInputToOutput(Inputs, Outputs);
 	else
-		Transforms[0].Transform(GetLayerOutputValues(-1, Values), GetLayerOutputValues(0, Values));
+		Transforms[0].Transform(Inputs, Outputs);
 
 	return SumHiddenLayers(Values);
 }
@@ -178,7 +239,57 @@ T NeuralNetwork<T>::SumHiddenLayers(T Values[])
 }
 
 template<typename T>
-std::string NeuralNetwork<T>::PrintWeights()
+void NeuralNetwork<T>::AddLayer(int outputCount, eActivation activationType, eLayout layoutType)
+{
+	int32_t outputValueStart = (layerCount > 0) ? Layers[layerCount - 1].outputValueStart : 0;
+	outputValueStart += InputCount(layerCount);
+
+	// Enforce 64-byte alignment (16 * 2 bytes per value)
+	if ((outputValueStart % 32)) outputValueStart += 32 - (outputValueStart % 32);
+	assert(outputValueStart % 32 == 0);
+	assert(outputCount < kMaxValuesInLayer);
+
+	// Initialize the layer from the params
+	Layers[layerCount].Init(outputCount, outputValueStart, activationType, layoutType);
+	if (layoutType == eLayout::INPUT_TO_OUTPUTS) assert((outputCount % 16) == 0);
+	layerCount++;
+}
+
+template<typename T>
+void NeuralNetwork<T>::Build()
+{
+	// How many weights do we need
+	weightCount = 0;
+	int prevOutputCount = inputCount;
+	for (uint32_t l = 0; l < layerCount; l++)
+	{
+		weightCount += Layers[l].outputCount * prevOutputCount + Layers[l].outputCount; // weights + biases
+		prevOutputCount = Layers[l].outputCount;
+	}
+
+	// Free any allocated weights
+	if (Weights) {
+		delete[] Weights;
+	}
+
+	// Allocate the weights
+	const uint32_t maxWeightCount = (weightCount + layerCount * 31);
+	Weights = AlignedAllocUtil<T>(maxWeightCount, 64);
+	memset(Weights, 0, maxWeightCount * sizeof(T));
+
+	// Initialize the layers
+	int weightStart = 0;
+	for (uint32_t l = 0; l < layerCount; l++)
+	{
+		int inputs = l > 0 ? Layers[l - 1].outputCount : inputCount;
+		Transforms[l].Init(inputs, Layers[l].outputCount, Weights, weightStart, Layers[l].activationType, Layers[l].layoutType);
+		weightStart += Transforms[l].WeightCount();
+		if ((weightStart % 16)) weightStart += 16 - (weightStart % 16); // enforce 32-byte alignment
+	}
+}
+
+template<typename T>
+std::string NeuralNetwork<T>::PrintWeights() const
 {
 	std::stringstream ss;
 	ss << "layerCount : " << layerCount << "  weightCount : " << WeightCount() << "  size : " << Size() << "\r\n\r\n";

@@ -1,5 +1,6 @@
 //
 // Tranpositiontable.h
+// by Jonathan Kreuzer
 //
 // TEntry - single entry in the tranposition table, storing the usual info (searchEval, depth, best-move, etc.)
 // TranspositionTable - a table of entries and related functionality
@@ -16,11 +17,11 @@ struct TEntry
 {
 	enum eFailType { TT_EXACT, TT_FAIL_LOW, TT_FAIL_HIGH };
 
-	bool inline IsBoard(const SBoard& board) const
+	bool inline IsBoard(uint64_t hashKey) const
 	{
-		return m_checksum == (board.HashKey >> 32);
+		return m_checksum == (hashKey >> 32);
 	}
-	void inline Read(uint64_t boardHash, short alpha, short beta, SMove& bestmove, int& value, int& boardEval, int depth, int ahead)
+	void inline Read(uint64_t boardHash, short alpha, short beta, Move& bestmove, int& value, int& boardEval, int depth, int ahead)
 	{
 		if (m_checksum == (boardHash >> 32)) // To be almost totally sure these are really the same position.  
 		{
@@ -36,14 +37,14 @@ struct TEntry
 					tempVal = m_searchEval + ahead;
 				}
 
-				switch ( FailType() )
+				switch (FailType())
 				{
-					case TT_EXACT: value = tempVal;  // Exact value
-						break;
-					case TT_FAIL_LOW: if (tempVal <= alpha) value = tempVal; // Alpha Bound (check to make sure it's usuable)
-						break;
-					case TT_FAIL_HIGH: if (tempVal >= beta) value = tempVal; // Beta Bound (check to make sure it's usuable)
-						break;
+				case TT_EXACT: value = tempVal;  // Exact value
+					break;
+				case TT_FAIL_LOW: if (tempVal <= alpha) value = tempVal; // Alpha Bound (check to make sure it's usuable)
+					break;
+				case TT_FAIL_HIGH: if (tempVal >= beta) value = tempVal; // Beta Bound (check to make sure it's usuable)
+					break;
 				}
 			}
 			// Take the best move from Transposition Table                                                
@@ -52,34 +53,76 @@ struct TEntry
 		}
 	}
 
-	void inline Write(uint64_t boardHash, short alpha, short beta, SMove& bestmove, int searchEval, int boardEval, int depth, int ahead, int ttAge)
+	void inline Write(uint64_t boardHash, short alpha, short beta, Move& bestmove, int searchEval, int boardEval, int depth, int ahead, int ttAge)
 	{
-		if ((m_ageAndFailtype&63) == ttAge && m_depth > depth && m_depth > 14) return; // Don't write over deeper entries from same search
+		const uint32_t newChecksum = (uint32_t)(boardHash >> 32);
+		const bool sameBoard = (newChecksum == m_checksum);
 
-		m_checksum = (uint32_t)(boardHash >> 32);
+		m_checksum = newChecksum;
 		m_searchEval = searchEval;
 		m_boardEval = boardEval;
+		m_depth = depth;
+		if (!sameBoard || bestmove != NO_MOVE) // don't ovewrite a bestmove with no_move
+		{
+			m_bestmove = bestmove;
+		}
+
 		// If this is a game ending value, must adjust it since it depends on the variable ahead
 		if (m_searchEval > MIN_WIN_SCORE) m_searchEval += ahead;
 		if (m_searchEval < -MIN_WIN_SCORE) m_searchEval -= ahead;
 		assert(m_searchEval <= 2001);
-		m_depth = depth;
-		m_bestmove = bestmove;
+
 		m_ageAndFailtype = ttAge;
-		if (searchEval <= alpha) m_ageAndFailtype |= (TT_FAIL_LOW<<6);
-		else if (searchEval >= beta)  m_ageAndFailtype |= (TT_FAIL_HIGH<<6);
-		else m_ageAndFailtype |= (TT_EXACT<<6);
+		if (searchEval <= alpha) m_ageAndFailtype |= (TT_FAIL_LOW << 6);
+		else if (searchEval >= beta)  m_ageAndFailtype |= (TT_FAIL_HIGH << 6);
+		else m_ageAndFailtype |= (TT_EXACT << 6);
 	}
 
 	// DATA
 	uint32_t m_checksum;
-	SMove m_bestmove;
+	Move m_bestmove;
 	int16_t m_searchEval;
 	int16_t m_boardEval;
 	int8_t m_depth;
 	uint8_t m_ageAndFailtype; // Age (6 bits) + FailType (2 bits)
 
 	inline uint8_t FailType() { return m_ageAndFailtype >> 6; }
+	inline uint8_t Age() { return (m_ageAndFailtype & 63); }
+};
+
+// Buckets of entries. Choose which entry to overwrite, if they are all filled. Mainly helpful in case of ttable saturation.
+constexpr int ENTRIES_PER_BUCKET = 2;
+struct TBucket
+{
+	TEntry entries[ENTRIES_PER_BUCKET];
+
+	// Choose which entry to write to
+	TEntry* ChooseEntry(uint64_t hashKey, uint8_t searchAge )
+	{
+		int bestScore = -1000;
+		TEntry* bestEntry = &entries[0];
+		for (int i = 0; i < ENTRIES_PER_BUCKET; i++)
+		{
+			// If we find a match or empty entry, use it
+			if (entries[i].IsBoard(hashKey) || entries[i].m_checksum == 0)
+			{
+				bestEntry = &entries[i];
+				break;
+			}
+			
+			// Otherwise use the best entry based on depth and failtype
+			int ageDiff = abs(entries[i].Age() - searchAge);
+			int score = - entries[i].m_depth 
+						- (entries[i].FailType() == TEntry::TT_EXACT) ? 10 : 0;
+						+ (ageDiff > 1) ? 100 : (ageDiff == 1) ? 4 : 0;
+			if (score > bestScore)
+			{
+				score = bestScore;
+				bestEntry = &entries[i];
+			}
+		}
+		return bestEntry;
+	}
 };
 
 //
@@ -89,46 +132,49 @@ struct TEntry
 struct TranspositionTable
 {
 	// transposition table data
-	TEntry* entries = nullptr;
-	size_t numEntries = 0;
+	TBucket* buckets = nullptr;
+	size_t numBuckets = 0;
 	int sizeMb = 128;
 
-	static uint64_t HashFunction[32][12], HashSTM;
+	static uint64_t HashFunction[NUM_BOARD_SQUARES][NUM_PIECE_TYPES];
+	static uint64_t HashSTM;
 
 	void Clear()
 	{
-		memset(entries, 0, sizeof(TEntry) * numEntries);
+		memset(buckets, 0, sizeof(TBucket) * numBuckets);
 	}
 
-	TEntry* GetEntry(const SBoard& board)
+	TEntry* GetEntry(const Board& board, uint8_t searchAge)
 	{
-		return &entries[board.HashKey % numEntries];
+		auto& bucket = buckets[board.hashKey % numBuckets];
+		return bucket.ChooseEntry(board.hashKey, searchAge);
 	}
 
 	// Allocate the hashtable.
 	// returns true if successful
 	bool SetSizeMB(int _sizeMb)
 	{
-		if (entries)
-			free(entries);
+		if (buckets)
+			AlignedFreeUtil(buckets);
 
 		sizeMb = _sizeMb;
-		numEntries = ((size_t)sizeMb * (1 << 20)) / sizeof(TEntry);
-		entries = (TEntry*)malloc(sizeof(TEntry) * numEntries);
+		numBuckets = ((size_t)sizeMb * (1 << 20)) / sizeof(TBucket);
+		buckets = AlignedAllocUtil<TBucket>(numBuckets, 64);
 
-		return (entries);
+		return (buckets != nullptr);
 	}
 
+	// FIXME? This probably isn't a good rand
 	static uint64_t Rand15() { return (uint64_t)rand(); }
 	static uint64_t Rand64() {
-		return Rand15() + (Rand15() << 10) + (Rand15() << 20) +	(Rand15() << 30) + (Rand15() << 40) + (Rand15() << 50);
+		return Rand15() ^ (Rand15() << 10) ^ (Rand15() << 20) ^ (Rand15() << 30) ^ (Rand15() << 40) ^ (Rand15() << 50);
 	}
 
 	static void CreateHashFunction()
 	{
 		// Note : the hash function is also used for opening book, so if it change the opening book won't find positions
-		for (int i = 0; i < 32; i++)
-			for (int x = 0; x < 9; x++)
+		for (int i = 0; i < NUM_BOARD_SQUARES; i++)
+			for (int x = 0; x < NUM_PIECE_TYPES; x++)
 			{
 				HashFunction[i][x] = Rand64();
 			}

@@ -18,7 +18,7 @@ struct HistoryTable
 		score += delta - (score * abs(delta) / HISTORY_MAX);
 	}
 
-	inline void AdjustHistory(int src, int dir, ePieceType piece, int prevOppMoveIdx, int delta)
+	inline void AdjustHistory(int src, int dir, ePieceType piece, int prevOppMoveIdx, int prevOwnMoveIdx, int delta)
 	{
 		int historyIdx = MoveIdx(src, dir, piece);
 
@@ -26,21 +26,26 @@ struct HistoryTable
 
 		if (prevOppMoveIdx > 0) {
 			UpdateScore(counterHistory[prevOppMoveIdx * PIECE_DIR_SRC_SIZE + historyIdx], delta);
+			if (prevOwnMoveIdx > 0) {
+				UpdateScore(followupHistory[prevOwnMoveIdx * PIECE_DIR_SRC_SIZE + historyIdx], delta );
+			}
 		}
 	}
 
-	inline int GetScore(int src, int dir, ePieceType piece, int prevOppMoveIdx)
+	inline int GetScore(int src, int dir, ePieceType piece, int prevOppMoveIdx, int prevOwnMoveIdx)
 	{
-		int historyIdx = MoveIdx(src, dir, piece);
+		const int historyIdx = MoveIdx(src, dir, piece);
 
 		return history[historyIdx]
-			+ counterHistory[prevOppMoveIdx * PIECE_DIR_SRC_SIZE + historyIdx];
+			+ counterHistory[prevOppMoveIdx * PIECE_DIR_SRC_SIZE + historyIdx]
+			+ followupHistory[prevOwnMoveIdx * PIECE_DIR_SRC_SIZE + historyIdx];
 	}
 
 	void Clear()
 	{
 		memset(history, 0, sizeof(history));
 		memset(counterHistory, 0, sizeof(counterHistory));
+		memset(followupHistory, 0, sizeof(followupHistory));
 	}
 
 	static constexpr int pieceType[8] = { 0, 0, 1, 0, 0, 2, 3, 0 };
@@ -49,46 +54,45 @@ struct HistoryTable
 
 	int16_t history[PIECE_DIR_SRC_SIZE];
 	int16_t counterHistory[PIECE_DIR_SRC_SIZE * PIECE_DIR_SRC_SIZE];
+	int16_t followupHistory[PIECE_DIR_SRC_SIZE * PIECE_DIR_SRC_SIZE];
 };
 
-static void HistorySort(HistoryTable& historyTable, CMoveList& moveList, int startIdx, const SBoard& board, int prevOppMoveIdx)
+static void HistorySort(HistoryTable& historyTable, MoveList& moveList, int startIdx, const Board& board, int prevOppMoveIdx, int prevOwnMoveIdx )
 {
 	int numMoves = moveList.numMoves;
-	int32_t Scores[CMoveList::MAX_MOVES];
+	int32_t Scores[MoveList::MAX_MOVES];
 
 	// score the moves
 	for (int i = startIdx; i < numMoves; i++)
 	{
-		const SMove& move = moveList.Moves[i];
+		const Move& move = moveList.moves[i];
 		int src = move.Src();
-		Scores[i] = historyTable.GetScore(src, move.Dir(), board.GetPiece(src), prevOppMoveIdx);
+		Scores[i] = historyTable.GetScore(src, move.Dir(), board.GetPiece(src), prevOppMoveIdx, prevOwnMoveIdx);
 	}
 
 	// insertion sort
 	for (int d = startIdx + 1; d < numMoves; d++)
 	{
-		const SMove tempMove = moveList.Moves[d];
+		const Move tempMove = moveList.moves[d];
 		const int tempScore = Scores[d];
 		int i;
 		for (i = d; i > startIdx && tempScore > Scores[i - 1]; i--)
 		{
-			moveList.Moves[i] = moveList.Moves[i - 1];
+			moveList.moves[i] = moveList.moves[i - 1];
 			Scores[i] = Scores[i - 1];
 		}
-		moveList.Moves[i] = tempMove;
+		moveList.moves[i] = tempMove;
 		Scores[i] = tempScore;
 	}
 }
 
-static void UpdateHistory(HistoryTable& historyTable, const SMove& bestMove, int depth, const SBoard& board, int ply, int prevOppMoveIdx, SMove searchedMoves[], int numSearched)
+static void UpdateHistory(HistoryTable& historyTable, const Move& bestMove, int depth, const Board& board, int ply, int prevOppMoveIdx, int prevOwnMoveIdx, Move searchedMoves[], int numSearched)
 {
-	g_stack[ply].killerMove = bestMove;
-
 	if (depth > 1)
 	{
 		int adjust = std::min(depth * (depth - 1), 15 * 15);
 		int src = bestMove.Src();
-		historyTable.AdjustHistory(src, bestMove.Dir(), board.GetPiece(src), prevOppMoveIdx, adjust);
+		historyTable.AdjustHistory(src, bestMove.Dir(), board.GetPiece(src), prevOppMoveIdx, prevOwnMoveIdx, adjust);
 
 		if (numSearched > 1 && depth > 2)
 		{
@@ -96,7 +100,7 @@ static void UpdateHistory(HistoryTable& historyTable, const SMove& bestMove, int
 			{
 				if (searchedMoves[i] != bestMove) {
 					src = searchedMoves[i].Src();
-					historyTable.AdjustHistory(src, searchedMoves[i].Dir(), board.GetPiece(src), prevOppMoveIdx, -(adjust - 1));
+					historyTable.AdjustHistory(src, searchedMoves[i].Dir(), board.GetPiece(src), prevOppMoveIdx, prevOwnMoveIdx, -(adjust - 1));
 				}
 			}
 		}

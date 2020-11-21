@@ -4,13 +4,29 @@
 //
 // Reads match pdn files from a directory (eg. CheckerBoard matches) and append thems to a training pdn file.
 // Reads the training pdn files, converting to positions.
-// Convert the positions to the neural net inputs and a target value, to be trained, eg. by TensorFlow
+// Converts the positions to the neural net inputs and a target value, to be trained, eg. by TensorFlow
 //
 #include <fstream>
 
 #include "NeuralNet/NeuralNet.h"
 #include "engine.h"
 #include "learning.h"
+
+void NeuralNetLearner::WriteNetStructure(const char* filePath, const NeuralNetwork<nnInt_t>& network )
+{
+	FILE* fp = fopen( filePath, "wt");
+	if (fp)
+	{
+		fprintf(fp, "%d\n", network.InputCount());
+		fprintf(fp, "%d\n", network.LayerCount());
+		for (int l = 0; l < network.LayerCount(); l++)
+		{
+			fprintf(fp, "%d\n", network.GetLayer(l)->outputCount );
+		}
+
+		fclose(fp);
+	}
+}
 
 void NeuralNetLearner::WriteNetInputsBinary(FILE* fp, nnInt_t InputValues[], int32_t inputCount)
 {
@@ -54,10 +70,10 @@ void NeuralNetLearner::ConvertGamesToPositions( std::vector<std::string> pdnFile
 
 				// Read game transcript from buffer
 				float gameResult = 0.5f;
-				transcript.FromPDN(buffer, &gameResult);
+				transcript.FromString(buffer, &gameResult);
 
 				// Replay the game exporting positions
-				SBoard replayBoard = transcript.startBoard;
+				Board replayBoard = transcript.startBoard;
 				int i = 0;
 				while (transcript.moves[i].data != 0 && i < transcript.numMoves)
 				{
@@ -65,7 +81,7 @@ void NeuralNetLearner::ConvertGamesToPositions( std::vector<std::string> pdnFile
 					i++;
 
 					// skip positions with jumps possible, won't be leaf anyway and tough to eval
-					if (replayBoard.Bitboards.GetJumpers(replayBoard.SideToMove)) { continue; }
+					if (replayBoard.Bitboards.GetJumpers(replayBoard.sideToMove)) { continue; }
 
 					// endgame database should take care of these positions
 					if (replayBoard.numPieces[WHITE] + replayBoard.numPieces[BLACK] <= 4) { continue; }
@@ -86,6 +102,8 @@ void NeuralNetLearner::ExportTrainingSet(std::vector<TrainingPosition>& position
 	// Export training data for each net, for all positions in the set the net is active for
 	for (auto net : engine.evalNets )
 	{
+		WriteNetStructure( net->structureFile.c_str(), net->network);
+
 		FILE* posFile = fopen(net->trainingPositionFile.c_str(), "wb");
 		if (posFile)
 		{
@@ -149,7 +167,7 @@ int NeuralNetLearner::ImportLatestMatches(MatchResults& results)
 {
 	std::string matchDir = "C:/Users/Jon/Documents/Martin Fierz/CheckerBoard/games/matches/";
 	std::vector<std::string> filenums = { "", "[1]", "[2]", "[3]", "[4]", "[5]", "[6]", "[7]", "[8]", "[9]", "[10]" };
-	std::string outputFilename = "../Training/match7.pdn";
+	std::string outputFilename = "../Training/guiNN204-Cake188.pdn";
 	
 	int importedFileCount = 0;
 	int wins = 0, losses = 0, draws = 0;

@@ -22,14 +22,14 @@ struct SDatabaseInfo
 	dbType type;
 	bool loaded = false;
 
-	inline bool InDatabase(const SBoard& board)
+	inline bool InDatabase(const Board& board)
 	{
 		return (loaded && board.numPieces[WHITE] <= numWhite && board.numPieces[BLACK] <= numBlack);
 	}
 };
 
 void InitializeGuiDatabases(SDatabaseInfo& dbInfo);
-int QueryGuiDatabase(const SBoard& Board);
+int QueryGuiDatabase(const Board& Board);
 
 void InitializeEdsDatabases(SDatabaseInfo& dbInfo);
-int QueryEdsDatabase(const SBoard& Board, int ahead);
+int QueryEdsDatabase(const Board& Board, int ahead);

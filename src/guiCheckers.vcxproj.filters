@@ -80,6 +80,9 @@
     <ClCompile Include="board.cpp">
       <Filter>Source Files\board</Filter>
     </ClCompile>
+    <ClCompile Include="checkersGui.cpp">
+      <Filter>Source Files\gui</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="NeuralNet\mathSimd.h">
@@ -138,6 +141,9 @@
     </ClInclude>
     <ClInclude Include="uncompress.h">
       <Filter>Source Files\database</Filter>
+    </ClInclude>
+    <ClInclude Include="checkersGui.h">
+      <Filter>Source Files\gui</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>

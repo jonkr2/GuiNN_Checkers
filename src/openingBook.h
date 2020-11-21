@@ -64,11 +64,11 @@ public:
 
 	// Functions
 	void LearnGame(int numMoves, int adjust);
-	int  FindMoves(SBoard& board, SMove Moves[], int16_t values[]);
-	int  GetMove(SBoard& board, SMove& bestMove);
-	void RemovePosition(SBoard& board, bool bQuiet);
-	int  GetValue(SBoard& board);
-	void AddPosition(SBoard& board, int16_t value, bool bQuiet);
+	int  FindMoves(Board& board, Move moves[], int16_t values[]);
+	int  GetMove(Board& board, Move& bestMove);
+	void RemovePosition(Board& board, bool bQuiet);
+	int  GetValue(Board& board);
+	void AddPosition(Board& board, int16_t value, bool bQuiet);
 	void AddPosition(uint32_t ulKey, uint32_t ulCheck, int16_t value, bool bQuiet);
 	int  Load(const char* sFileName);
 	int  Save(const char* sFileName);

@@ -8,14 +8,13 @@
 //
 // Commercial use of this code, in whole or in any part, is prohibited.
 // Non-commercial use is welcome, but you should clearly mention this code, and where it came from.
-// Also the source should remain publicly available.
+// Also the source should remain publicly available (if you distribute your modified program.)
 // www.3dkingdoms.com/checkers.htm
 //
 // These conditions apply to the code itself only.
 // You are of course welcome to read this code and learn from it without restrictions
 
 #include <stdio.h>
-#include <time.h>
 #include <stdlib.h>
 #include <conio.h>
 #include <memory.h>
@@ -31,15 +30,16 @@
 #include "engine.h"
 #include "learning.h"
 #include "guiWindows.h"
+#include "checkersGui.h" //  TODO : avoid including specific gui?
 
-// The Checkers Engine
-SEngine engine;
+// Our Checkers Engine
+Engine engine;
 
 // For external Checkerboard interface
-SCheckerboardInterface checkerBoard;
+CheckerboardInterface checkerBoard;
 
 // Transposition table hash function values
-uint64_t TranspositionTable::HashFunction[32][12];
+uint64_t TranspositionTable::HashFunction[NUM_BOARD_SQUARES][NUM_PIECE_TYPES];
 uint64_t TranspositionTable::HashSTM;
 
 // -----------------------
@@ -50,22 +50,21 @@ const char* GetNodeCount(uint64_t count, int nBuf)
 	static char buffer[4][100];
 
 	if (count < 1000)
-		sprintf(buffer[nBuf], "%d n", (int)count);
+		snprintf(buffer[nBuf], sizeof(buffer[nBuf]), "%d n", (int)count);
 	else if (count < 1000000)
-		sprintf(buffer[nBuf], "%.2f kn", (float)count / 1000.0f);
+		snprintf(buffer[nBuf], sizeof(buffer[nBuf]), "%.2f kn", (float)count / 1000.0f);
 	else
-		sprintf(buffer[nBuf], "%.2f Mn", (float)count / 1000000.0f);
+		snprintf(buffer[nBuf], sizeof(buffer[nBuf]), "%.2f Mn", (float)count / 1000000.0f);
 
 	return buffer[nBuf];
 }
 
-void RunningDisplay( const SMove& bestMove, int bSearching)
+void RunningDisplay(SearchInfo& displayInfo, const Move& bestMove, bool bSearching)
 {
-	int game_over_distance = 300;
 	char sTemp[4096];
 	static int LastEval = 0;
 
-	static SMove LastBest = NO_MOVE;
+	static Move LastBest = NO_MOVE;
 	if (bestMove != NO_MOVE) {
 		LastBest = bestMove;
 	}
@@ -73,42 +72,34 @@ void RunningDisplay( const SMove& bestMove, int bSearching)
 	int j = 0;
 	if (!checkerBoard.bActive) {
 		j += sprintf(sTemp + j, "Red: %d   White: %d                           ", engine.board.numPieces[BLACK], engine.board.numPieces[WHITE]);
-		if (engine.searchLimits.maxDepth == BEGINNER_DEPTH)
-			j += sprintf(sTemp + j, "Level: Beginner  %ds  ", (int)engine.searchLimits.maxSeconds);
-		else if (engine.searchLimits.maxDepth == EXPERT_DEPTH)
-			j += sprintf(sTemp + j, "Level: Expert  %ds  ", (int)engine.searchLimits.maxSeconds);
-		else if (engine.searchLimits.maxDepth == NORMAL_DEPTH)
-			j += sprintf(sTemp + j, "Level: Advanced  %ds  ", (int)engine.searchLimits.maxSeconds);
-		if (bSearching)
-			j += sprintf(sTemp + j, "(searching...)\n");
-		else
-			j += sprintf(sTemp + j, "\n");
+		j += sprintf(sTemp + j, "Limits: %d-ply   %ds  ", engine.searchLimits.maxDepth, (int)engine.searchLimits.maxSeconds);
+		j += sprintf(sTemp + j, "%s\n", bSearching ? "(searching...)" : "");
 	}
 
-	float seconds = float(clock() - starttime) / CLOCKS_PER_SEC;
+	float seconds = TimeSince( displayInfo.startTimeMs );
 	int nps = 0;
 	if (seconds > 0.0f)
-		nps = int(float(g_searchInfo.nodes) / (1000.0 * seconds));
+		nps = int(float(displayInfo.nodes) / (1000.0 * seconds));
 
-	if (abs(g_searchInfo.eval) < 3000)
-		LastEval = g_searchInfo.eval;
+	if (abs(displayInfo.eval) < 3000)
+		LastEval = displayInfo.eval;
 
 	// Show smiley if winning to better follow fast blitz matches
 	bool winning = (-LastEval > 40 && engine.computerColor == BLACK) || (-LastEval < -40 && engine.computerColor == WHITE);
-	winning = winning && g_searchInfo.depth > 6; // single move can create false moods because of low search depth
+	winning = winning && displayInfo.depth > 6; // single move can create false moods because of low search depth
 	const char* sMood = (winning && abs(LastEval) > 200) ? ":-D  " : winning ? ":-)  " : "";
 
 	j += sprintf(sTemp + j,
 		"%sEval: %d  Depth: %d/%d (%d/%d)  ",
 		sMood,
 		-LastEval,
-		g_searchInfo.depth,
-		g_searchInfo.selectiveDepth,
-		g_searchInfo.searchingMove,
-		g_stack[1].moveList.numMoves );
+		displayInfo.depth,
+		displayInfo.selectiveDepth,
+		displayInfo.searchingMove,
+		displayInfo.numMoves );
 
 	// Also announce distance to win when the databases are returning high scores
-	if (abs(2000 - abs(LastEval)) <= game_over_distance)
+	if (abs(LastEval) > MIN_WIN_SCORE)
 	{
 		if (LastEval < 0) {
 			j += sprintf(sTemp + j, "(Red wins in %d)", abs(2001 - abs(LastEval)));
@@ -121,20 +112,25 @@ void RunningDisplay( const SMove& bestMove, int bSearching)
 		j += sprintf(sTemp + j, "\n");
 
 	j += sprintf(sTemp + j,
-		"Move: %s   Time: %.2fs   Speed %d KN/s   Nodes: %s (db: %s)   ",
+		"Move: %s   Time: %.2fs   Speed %d KN/s   Nodes: %s (db: %s)",
 		Transcript::GetMoveString(LastBest).c_str(),
 		seconds,
 		nps,
-		GetNodeCount(g_searchInfo.nodes, 0),
-		GetNodeCount(g_searchInfo.databaseNodes, 1));
+		GetNodeCount(displayInfo.nodes, 0),
+		GetNodeCount(displayInfo.databaseNodes, 1) );
+
+	if (!checkerBoard.bActive)
+		j += sprintf(sTemp + j, "\n");
+
+	j += sprintf(sTemp + j, "%s", displayInfo.pv.ToString().c_str());
 
 	DisplayText(sTemp);
 }
 
-void SEngine::NewGame( const SBoard& startBoard, bool resetTranscript )
+void Engine::NewGame( const Board& startBoard, bool resetTranscript )
 {
 	board = startBoard;
-	historyTable.Clear();
+	searchThreadData.historyTable.Clear();
 
 	if (resetTranscript) { 
 		transcript.Init(startBoard); 
@@ -143,7 +139,7 @@ void SEngine::NewGame( const SBoard& startBoard, bool resetTranscript )
 	}
 }
 
-std::string SEngine::GetInfoString()
+std::string Engine::GetInfoString()
 {
 	// Endgame Database
 	std::string displayStr;
@@ -185,10 +181,10 @@ DWORD WINAPI ThinkingThread(void* /* param */)
 		WaitForSingleObject(hAction, INFINITE);
 		ResetEvent(hEngineReady);
 
-		winGUI.SetComputerColor((eColor)engine.board.SideToMove);
-		BestMoveInfo moveInfo = ComputerMove(engine.board);
-		winGUI.DoGameMove(moveInfo.move);
-		winGUI.ThinkingMenuActive(false);
+		GUI.SetComputerColor((eColor)engine.board.sideToMove);
+		BestMoveInfo moveInfo = ComputerMove( engine.board, engine.searchThreadData);
+		GUI.DoGameMove(moveInfo.move);
+		GUI.ThinkingMenuActive(false);
 		engine.bThinking = false;
 	}
 
@@ -200,13 +196,19 @@ DWORD WINAPI ThinkingThread(void* /* param */)
 //
 // status_str is NULL if not called from CheckerBoard
 //
-void SEngine::Init(char* status_str)
+void Engine::Init(char* status_str)
 {
 	InitBitTables();
 	InitializeNeuralNets();
 	TranspositionTable::CreateHashFunction();
 	openingBook = new COpeningBook;
-	historyTable.Clear();
+
+	searchThreadData.historyTable.Clear();
+
+	const int firstLayerOutputCount = (evalNets.size() > 0 && evalNets[0]) ? evalNets[0]->network.GetLayer(0)->outputCount : kMaxValuesInLayer;
+	searchThreadData.Alloc(firstLayerOutputCount);
+
+	srand((unsigned int)time(0)); // Randomize
 
 	if (checkerBoard.bActive) {
 		get_hashsize(&TTable.sizeMb);
@@ -221,7 +223,7 @@ void SEngine::Init(char* status_str)
 	if (!checkerBoard.bActive || !openingBook->Load("engines\\opening.gbk"))
 		openingBook->Load("opening.gbk");
 
-	// Load Databases
+	// Load Endgame Databases
 	if (!dbInfo.loaded && checkerBoard.enable_wld)
 	{
 		if (status_str)
@@ -247,21 +249,20 @@ void SEngine::Init(char* status_str)
 		hAction = CreateEvent(NULL, FALSE, FALSE, NULL);
 		hThread = CreateThread(NULL, 0, ThinkingThread, 0, 0, &ThreadId);	
 		if (hThread == NULL) {
-			winGUI.ShowErrorPopup("Cannot Create Thread");
+			GUI.ShowErrorPopup("Cannot Create Thread");
 		}
 	}
 }
 
-void SEngine::MoveNow()
+void Engine::MoveNow()
 {
 	if (bThinking) {
 		bStopThinking = true;
 		WaitForSingleObject(hEngineReady, 500);
-		RunningDisplay(NO_MOVE, 0);
 	}
 }
 
-void SEngine::StartThinking()
+void Engine::StartThinking()
 {
 	WaitForSingleObject(hEngineReady, 1000);
 	engine.bStopThinking = false;

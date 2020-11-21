@@ -6,33 +6,33 @@
 
 struct Transcript
 {
-	void AddMove(SMove move)
+	void AddMove(Move move)
 	{
 		assert(numMoves < MAX_GAMEMOVES);
 		moves[numMoves++] = move;
 		moves[numMoves] = NO_MOVE;
 	}
-	void Init(SBoard inStartBoard)
+	void Init(Board inStartBoard)
 	{
 		startBoard = inStartBoard;
 		numMoves = 0;
 		moves[0].data = 0;
 	}
-	SMove& Back()
+	Move& Back()
 	{
 		return moves[numMoves];
 	}
 
-	std::string ToPDN();
-	int FromPDN(const char* sPDN, float* gameResult = nullptr );
-	int MakeMovePDN(int src, int dst, SBoard& board);
-	void ReplayGame(SBoard& board, uint64_t boardHashHistory[]);
-	static std::string GetMoveString(const SMove& move);
+	std::string ToString();
+	int FromString(const char* sPDN, float* gameResult = nullptr );
+	int MakeMovePDN(int src, int dst, Board& board);
+	void ReplayGame(Board& board, uint64_t boardHashHistory[]);
+	static std::string GetMoveString(const Move& move);
 	bool Save(const char* filepath);
 	bool Load(const char* filepath);
 
 
-	SBoard startBoard;
-	SMove moves[MAX_GAMEMOVES];
+	Board startBoard;
+	Move moves[MAX_GAMEMOVES];
 	int numMoves = 0;
 };

@@ -5,12 +5,12 @@
 
 const uint32_t MAX_JUMP_PATH = 8;
 
-struct SMove
+struct Move
 {
 	uint32_t data; // src(5), dst(5), jumpLen(5), jumpPathDirs(16) 8 * 2 bits, can jump 4 directions, unused(1)
 
-	SMove() {}
-	explicit SMove(uint32_t val) { data = val; }
+	Move() {}
+	explicit Move(uint32_t val) { data = val; }
 
 	inline int Src() const { return (data & 31); }
 	inline int Dst() const { return (data >> 5) & 31; }
@@ -25,13 +25,13 @@ struct SMove
 	inline int JumpLen() const { return (data >> 10) & 15; }
 	inline void SetJumpLen(int jumpLen) { data &= ~(15 << 10); data |= (jumpLen << 10); }
 
-	inline bool operator==(const SMove& b) const { return data == b.data; }
-	inline bool operator!=(const SMove& b) const { return data != b.data; }
+	inline bool operator==(const Move& b) const { return data == b.data; }
+	inline bool operator!=(const Move& b) const { return data != b.data; }
 
-	static int GetFinalDst(const SMove& Move);
+	static int GetFinalDst(const Move& Move);
 };
 
-static const SMove NO_MOVE(0);
+static const Move NO_MOVE(0);
 
 // This is a 32x4 ( 32 source squares x 4 move directions ) lookup table that will return the destination square index for the direction
 const int nextSq[32 * 4] = {
@@ -75,7 +75,7 @@ const int nextSq[32 * 4] = {
 //
 // MoveList
 //
-class CMoveList
+struct MoveList
 {
 public:
 	static const int MAX_MOVES = 36;
@@ -84,8 +84,8 @@ public:
 	// DATA
 	int numMoves = 0;
 	int numJumps = 0;
-	SMove m_JumpMove;
-	SMove Moves[MAX_MOVES];
+	Move m_JumpMove;
+	Move moves[MAX_MOVES];
 
 	// FUNCTIONS
 	void inline Clear()
@@ -94,15 +94,15 @@ public:
 		numMoves = 0;
 	}
 
-	void FindMoves(const eColor color, SCheckerBitboards& B);
-	void FindJumps(const eColor color, SCheckerBitboards& B, uint32_t Movers);
-	void FindNonJumps(const eColor color, const SCheckerBitboards& B, uint32_t Movers);
+	void FindMoves(Board& B);
+	void FindJumps(const eColor color, CheckerBitboards& B, uint32_t Movers);
+	void FindNonJumps(const eColor color, const CheckerBitboards& B, uint32_t Movers);
 
-	int inline FindIndex(const SMove& move) const
+	int inline FindIndex(const Move& move) const
 	{
 		for (int i = 0; i < numMoves; i++)
 		{
-			if (Moves[i].data == move.data) {
+			if (moves[i].data == move.data) {
 				return i;
 			}
 		}
@@ -110,14 +110,14 @@ public:
 	}
 
 	// Sorting
-	bool inline SwapToFront(const SMove& move)
+	bool inline SwapToFront(const Move& move)
 	{
 		for (int i = 0; i < numMoves; i++)
 		{
-			if (Moves[i] == move) {
-				SMove temp = Moves[0];
-				Moves[0] = move;
-				Moves[i] = temp;
+			if (moves[i] == move) {
+				Move temp = moves[0];
+				moves[0] = move;
+				moves[i] = temp;
 				return true;
 			}
 		}
@@ -125,59 +125,59 @@ public:
 	}
 
 	// Sort jumps based on expected material change
-	inline void SortJumps(int startIdx, const SCheckerBitboards& B)
+	inline void SortJumps(int startIdx, const CheckerBitboards& B)
 	{
 		/*int Scores[32];
 		for (int i = 0; i < numJumps; i++) {
-			Scores[i] = Moves[i].JumpLen() + ((SqBit(Moves[i].Src()) & B.K) == 0);  // TODO : check for jump backs, to be more often helpful in sorting
+			Scores[i] = moves[i].JumpLen() + ((SqBit(moves[i].Src()) & B.K) == 0);  // TODO : check for jump backs, to be more often helpful in sorting
 		}*/
 		// Insertion Sort
 		for (int d = startIdx + 1; d < numJumps; d++)
 		{
-			const SMove tempMove = Moves[d];
-			int tempScore = Moves[d].JumpLen();
+			const Move tempMove = moves[d];
+			int tempScore = moves[d].JumpLen();
 			int i;
-			for (i = d; i > 0 && tempScore > Moves[i - 1].JumpLen(); i--)
+			for (i = d; i > 0 && tempScore > moves[i - 1].JumpLen(); i--)
 			{
-				Moves[i] = Moves[i - 1];
+				moves[i] = moves[i - 1];
 				//Scores[i] = Scores[i - 1];
 			}
-			Moves[i] = tempMove;
+			moves[i] = tempMove;
 			//Scores[i] = tempScore;
 		}
 	}
 
 private:
 
-	int inline AddSqDir(const eColor color, SCheckerBitboards& B, int square, const bool isKing, int pathNum, const int dirFlag);
-	void inline CheckJumpDir(const eColor, SCheckerBitboards& B, int square, const int DIR);
-	void inline FindSqJumps(const eColor color, SCheckerBitboards& B, int square, int pathNum, int jumpSquare, const bool isKing);
+	int inline AddSqDir(const eColor color, CheckerBitboards& B, int square, const bool isKing, int pathNum, const int dirFlag);
+	void inline CheckJumpDir(const eColor, CheckerBitboards& B, int square, const int DIR);
+	void inline FindSqJumps(const eColor color, CheckerBitboards& B, int square, int pathNum, int jumpSquare, const bool isKing);
 
 	void inline StartJumpMove(int src, int dst)
 	{
-		m_JumpMove.data = (src)+(dst << 5);
+		m_JumpMove.data = (src) + (dst << 5);
 	}
 
-	void inline AddJump(SMove& Move, int pathNum)
+	void inline AddJump(Move& Move, int pathNum)
 	{
 		assert(pathNum < MAX_MOVE_PATH);
 		assert(numJumps < MAX_MOVES);
 
 		Move.SetJumpLen(pathNum + 1);
 		int jumpLen = Move.JumpLen();
-		Moves[numJumps++] = Move;
+		moves[numJumps++] = Move;
 	}
 
 	void inline AddMove(int src, int dst, int dirFlag)
 	{
 		assert(numMoves < MAX_MOVES);
 
-		Moves[numMoves++].data = (src)+(dst << 5) + (dirFlag << 15);
+		moves[numMoves++].data = (src) + (dst << 5) + (dirFlag << 15);
 		return;
 	}
 
 	// Add a move if the destination square is empty
-	void inline AddNormalMove(const SCheckerBitboards& C, const int src, const int dirFlag)
+	void inline AddNormalMove(const CheckerBitboards& C, const int src, const int dirFlag)
 	{
 		int dst = nextSq[src + dirFlag];
 		if (S[dst] & C.empty)
@@ -189,7 +189,7 @@ void InitBitTables();
 
 // BITBOARD helpers
 // Return the number of 1 bits in a 32-bit int
-int inline BitCount(uint32_t Moves)
+int inline BitCount(uint32_t moves)
 {
 #ifdef NO_POP_COUNT
 	if (Moves == 0) return 0;
@@ -197,13 +197,13 @@ int inline BitCount(uint32_t Moves)
 #elif __GNUC__	
 	return __builtin_popcountll(Moves);
 #else
-	return _mm_popcnt_u32(Moves);
+	return _mm_popcnt_u32(moves);
 #endif
 
 }
 
 // Find the index of the "lowest" 1 bit of a 32-bit int
-uint32_t inline FindLowBit(uint32_t Moves)
+uint32_t inline FindLowBit(uint32_t moves)
 {
 #ifdef NO_POP_COUNT
 	if ( (Moves & 65535) ) return aLowBit[ (Moves & 65535) ];
@@ -215,21 +215,21 @@ uint32_t inline FindLowBit(uint32_t Moves)
 	return sq;
 #else
 	unsigned long sq;
-	if (_BitScanForward(&sq, Moves)) { return sq; }
+	if (_BitScanForward(&sq, moves)) { return sq; }
 #endif
 	return 0;
 }
 
 // Find the "highest" 1 bit of a 32-bit int
-uint32_t inline FindHighBit(uint32_t Moves)
+uint32_t inline FindHighBit(uint32_t moves)
 {
-	/*if ( ((Moves>>16) & 65535) ) return aHighBit[ ((Moves>>16) & 65535) ] + 16;
-	if ( (Moves & 65535) ) return aHighBit[ (Moves & 65535) ];*/
+	/*if ( ((moves>>16) & 65535) ) return aHighBit[ ((moves>>16) & 65535) ] + 16;
+	if ( (moves & 65535) ) return aHighBit[ (moves & 65535) ];*/
 #ifdef __GNUC__
 	return 63 - __builtin_clzll(bb);
 #else
 	unsigned long sq;
-	if (_BitScanReverse(&sq, Moves)) { return sq; }
+	if (_BitScanReverse(&sq, moves)) { return sq; }
 #endif
 	return 0;
 }
@@ -272,20 +272,6 @@ const uint32_t MASK_L5 = S[4] | S[5] | S[6] | S[12] | S[13] | S[14] | S[20] | S[
 const uint32_t MASK_R3 = S[28] | S[29] | S[30] | S[20] | S[21] | S[22] | S[12] | S[13] | S[14] | S[4] | S[5] | S[6];
 const uint32_t MASK_R5 = S[25] | S[26] | S[27] | S[17] | S[18] | S[19] | S[9] | S[10] | S[11];
 
-
-const uint32_t MASK_RANK[8] = { S[0] | S[1] | S[2] | S[3],
-							 S[4] | S[5] | S[6] | S[7],
-							 S[8] | S[9] | S[10] | S[11],
-							 S[12] | S[13] | S[14] | S[15],
-							 S[16] | S[17] | S[18] | S[19],
-							 S[20] | S[21] | S[22] | S[23],
-							 S[24] | S[25] | S[26] | S[27],
-							 S[28] | S[29] | S[30] | S[31] };
-
-// Returns rank relative to color c, from 1-8
-constexpr uint32_t RankMask(const eColor c, const int rank) { return MASK_RANK[c == BLACK ? rank - 1 : 8 - rank]; }
-
-const uint32_t MASK_ODD_ROW = MASK_RANK[0] | MASK_RANK[2] | MASK_RANK[4] | MASK_RANK[6];
-const uint32_t SINGLE_EDGE = S[0] | S[1] | S[2] | S[8] | S[16] | S[12] | S[20] | S[29] | S[30] | S[31] | S[23] | S[15];
-const uint32_t CENTER_8 = S[9] | S[10] | S[13] | S[14] | S[17] | S[18] | S[21] | S[22];
-const uint32_t DOUBLE_CORNER = S[3] | S[7] | S[24] | S[28];
+constexpr uint32_t SINGLE_EDGE = S[0] | S[1] | S[2] | S[8] | S[16] | S[12] | S[20] | S[29] | S[30] | S[31] | S[23] | S[15];
+constexpr uint32_t CENTER_8 = S[9] | S[10] | S[13] | S[14] | S[17] | S[18] | S[21] | S[22];
+constexpr uint32_t DOUBLE_CORNER = S[3] | S[7] | S[24] | S[28];

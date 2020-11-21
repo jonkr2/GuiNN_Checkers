@@ -5,9 +5,7 @@
 #include <initializer_list>
 #include "defines.h"
 #include "uncompress.h"
-#include "board.h"
-#include "moveGen.h"
-#include "endgameDatabase.h"
+#include "engine.h"
 
 const int SIZE2 = 32/4 * 32 * 2;
 const int SIZE3 = SIZE2 * 32;
@@ -152,10 +150,10 @@ int ComputeIndex( int WS[], int BS[], int &nPieces, int stm, int &bFlip)
 // Get Index From Board
 // Should be 2 of a color at most
 //
-int GetIndexFromBoard( const SBoard &Board, int &bFlip, int &nPieces )
+int GetIndexFromBoard( const Board &Board, int &bFlip, int &nPieces )
 {
 	int WSqs[2], BSqs[2];
-	int stm = Board.SideToMove;
+	int stm = Board.sideToMove;
 
 	WSqs[0] = -1; WSqs[1] = -1;
 	BSqs[0] = -1; BSqs[1] = -1;
@@ -186,7 +184,7 @@ int GetIndexFromBoard( const SBoard &Board, int &bFlip, int &nPieces )
 //
 // Return a Win/Loss/Draw value for the board
 //
-int QueryGuiDatabase( const SBoard &Board )
+int QueryGuiDatabase( const Board &Board )
 {
 	int bFlip, nPieces;
 	int Result = dbResult::NO_RESULT;
@@ -203,19 +201,19 @@ int QueryGuiDatabase( const SBoard &Board )
 //
 // Test passed board and store the result
 //
-int inline TestBoard( SBoard &Board, int nPieces, int np1, int np2, int np3, int RIndex )
+int inline TestBoard( Board &board, int nPieces, int np1, int np2, int np3, int RIndex )
 {
-	CMoveList Moves;
-	SBoard OldBoard = Board;
+	MoveList moves;
+	Board oldBoard = board;
 	int nLosses, Index, bFlip;
 	int totalWins = 0;
 
 	for (eColor stm : { BLACK, WHITE } )
 	{
-		Board.SideToMove = stm;
-		OldBoard.SideToMove = stm;
+		board.sideToMove = stm;
+		oldBoard.sideToMove = stm;
 
-		Index = GetIndexFromBoard( Board, bFlip, nPieces );
+		Index = GetIndexFromBoard(board, bFlip, nPieces );
 		if (nPieces == 2) pResults = ResultsTwo;
 		else if (nPieces == 3) pResults = ResultsThree;  
 		else if (nPieces == 4) pResults = ResultsFour;		
@@ -228,21 +226,21 @@ int inline TestBoard( SBoard &Board, int nPieces, int np1, int np2, int np3, int
 			continue;
 		}
 		
-		const dbResult Win = (Board.SideToMove == WHITE) ? dbResult::WHITEWIN : dbResult::BLACKWIN;
-		const dbResult Loss = (Board.SideToMove == WHITE) ? dbResult::BLACKWIN : dbResult::WHITEWIN;
+		const dbResult Win = (board.sideToMove == WHITE) ? dbResult::WHITEWIN : dbResult::BLACKWIN;
+		const dbResult Loss = (board.sideToMove == WHITE) ? dbResult::BLACKWIN : dbResult::WHITEWIN;
 
-		Moves.FindMoves(Board.SideToMove, Board.Bitboards);
-		if (Moves.numMoves == 0) { // Can't move, so it's a loss
+		moves.FindMoves(board);
+		if (moves.numMoves == 0) { // Can't move, so it's a loss
 			SetResult( Index, Loss ); 
 			totalWins++;
 		} else {
 			nLosses = 0;
 			// Check the moves. If a move wins this is a win, if they all lose it's a loss, otherwise it's a draw
-			for (int i = 0; i < Moves.numMoves; i++)
+			for (int i = 0; i < moves.numMoves; i++)
 			{
-				Board.DoMove( Moves.Moves[i] );
-				dbResult Result = (dbResult)QueryGuiDatabase( Board );
-				Board  = OldBoard;
+				board.DoMove( moves.moves[i] );
+				dbResult Result = (dbResult)QueryGuiDatabase(board);
+				board = oldBoard;
 				if ( Result == Win ) { 
 					SetResult(Index, Win);
 					totalWins++;
@@ -250,7 +248,7 @@ int inline TestBoard( SBoard &Board, int nPieces, int np1, int np2, int np3, int
 				}
 				if ( Result == Loss ) nLosses++;
 			}
-			if ( nLosses == Moves.numMoves ) 
+			if ( nLosses == moves.numMoves ) 
 			{
 				SetResult(Index, Loss);
 				totalWins++;
@@ -266,7 +264,7 @@ int inline TestBoard( SBoard &Board, int nPieces, int np1, int np2, int np3, int
 //
 void GenDatabase( int Piece1, int Piece2, int Piece3, int Piece4, int RIndex )
 {
-	SBoard Board;
+	Board Board;
 
 	int lastTotalWins = -1;
 	int totalWins = 0;
