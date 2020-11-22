@@ -150,32 +150,32 @@ int ComputeIndex( int WS[], int BS[], int &nPieces, int stm, int &bFlip)
 // Get Index From Board
 // Should be 2 of a color at most
 //
-int GetIndexFromBoard( const Board &Board, int &bFlip, int &nPieces )
+int GetIndexFromBoard( const Board &board, int &bFlip, int &nPieces )
 {
 	int WSqs[2], BSqs[2];
-	int stm = Board.sideToMove;
+	int stm = board.sideToMove;
 
 	WSqs[0] = -1; WSqs[1] = -1;
 	BSqs[0] = -1; BSqs[1] = -1;
 
-	uint32_t WPieces = Board.Bitboards.P[WHITE];
+	uint32_t WPieces = board.Bitboards.P[WHITE];
 	while ( WPieces ) 
 	{
 		uint32_t sq = FindLowBit( WPieces );
 		WPieces &= ~S[sq];
-		ePieceType Piece = Board.GetPiece( sq );
+		ePieceType Piece = board.GetPiece( sq );
 		if (WSqs[0]==-1) { WSqs[0] = Piece + sq*16; }
-		else if ( Board.Bitboards.K & S[sq] ) {WSqs[1] = WSqs[0]; WSqs[0] = Piece + sq*16; }
+		else if (board.Bitboards.K & S[sq] ) {WSqs[1] = WSqs[0]; WSqs[0] = Piece + sq*16; }
 		else WSqs[1] = Piece + sq*16;
 	}
-	uint32_t BPieces = Board.Bitboards.P[BLACK];
+	uint32_t BPieces = board.Bitboards.P[BLACK];
 	while ( BPieces ) 
 	{
 		uint32_t sq = FindLowBit( BPieces );
 		BPieces &= ~S[sq];
-		ePieceType Piece = Board.GetPiece( sq );
+		ePieceType Piece = board.GetPiece( sq );
 		if (BSqs[0]==-1) { BSqs[0] = Piece+ sq*16; }
-		else if ( Board.Bitboards.K & S[sq] ) {BSqs[1] = BSqs[0]; BSqs[0] = Piece + sq*16; }
+		else if (board.Bitboards.K & S[sq] ) {BSqs[1] = BSqs[0]; BSqs[0] = Piece + sq*16; }
 		else BSqs[1] = Piece + sq*16;
 	}
 	return ComputeIndex( WSqs, BSqs, nPieces, stm, bFlip);
@@ -184,11 +184,11 @@ int GetIndexFromBoard( const Board &Board, int &bFlip, int &nPieces )
 //
 // Return a Win/Loss/Draw value for the board
 //
-int QueryGuiDatabase( const Board &Board )
+int QueryGuiDatabase( const Board& board )
 {
 	int bFlip, nPieces;
 	int Result = dbResult::NO_RESULT;
-	int Index = GetIndexFromBoard( Board, bFlip, nPieces);
+	int Index = GetIndexFromBoard(board, bFlip, nPieces);
 
 	if (nPieces == 1) return Index;
 	if (nPieces == 2) Result = GetResult( ResultsTwo  , Index );
@@ -264,7 +264,7 @@ int inline TestBoard( Board &board, int nPieces, int np1, int np2, int np3, int 
 //
 void GenDatabase( int Piece1, int Piece2, int Piece3, int Piece4, int RIndex )
 {
-	Board Board;
+	Board board;
 
 	int lastTotalWins = -1;
 	int totalWins = 0;
@@ -292,22 +292,22 @@ void GenDatabase( int Piece1, int Piece2, int Piece3, int Piece4, int RIndex )
 						if (np4 == np3 || np4 == np2 || np4 == np1) continue;
 
 					// Setup the board
-					Board.Clear( );
-					Board.SetPiece( np4, Piece4 );
-					Board.SetPiece( np3, Piece3 );
-					Board.SetPiece( np2, Piece2 );
-					Board.SetPiece( np1, Piece1 );
+					board.Clear( );
+					board.SetPiece( np4, Piece4 );
+					board.SetPiece( np3, Piece3 );
+					board.SetPiece( np2, Piece2 );
+					board.SetPiece( np1, Piece1 );
 
 					// Skip illegal positions( checker on back row )
-					if (Board.Bitboards.P[WHITE] & ~Board.Bitboards.K & (S[0]|S[1]|S[2]|S[3]) ) continue;
-					if (Board.Bitboards.P[BLACK] & ~Board.Bitboards.K & (S[28]|S[29]|S[30]|S[31]) ) continue;
+					if (board.Bitboards.P[WHITE] & ~board.Bitboards.K & (S[0]|S[1]|S[2]|S[3]) ) continue;
+					if (board.Bitboards.P[BLACK] & ~board.Bitboards.K & (S[28]|S[29]|S[30]|S[31]) ) continue;
 		
 					if (nPieces == -1)
 					{
-						GetIndexFromBoard( Board, bFlip, nPieces );
+						GetIndexFromBoard(board, bFlip, nPieces );
 						if (bFlip) return;
 					}
-					totalWins += TestBoard( Board, nPieces, np1, np2, np3, RIndex );
+					totalWins += TestBoard(board, nPieces, np1, np2, np3, RIndex );
 
 					if (Piece4 == EMPTY) break;
 				}

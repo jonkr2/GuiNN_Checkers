@@ -55,7 +55,7 @@ struct NetworkTransform
 		const T* weightsForOutput = &Weights[weightStart];
 
 		// Build outputs in int32s starting with bias
-		int32_t OutputsTemp[kMaxValuesInLayer];
+		alignas(64) int32_t OutputsTemp[kMaxValuesInLayer];
 		memcpy( OutputsTemp, biases32, outputCount * sizeof(int32_t) );
 
 		// Sum the weighted inputs for this output

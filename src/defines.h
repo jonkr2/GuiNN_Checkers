@@ -7,7 +7,11 @@
 #define USE_SSE2 // I think all 64-bit PCs have SSE2, so no reason to turn this off
 // #define NO_POP_COUNT // for very old processors that have no hardware popcount instruction
 
+#ifdef USE_AVX
+static const char* g_VersionName = "GuiNN Checkers 2.04 avx2";
+#else
 static const char* g_VersionName = "GuiNN Checkers 2.04";
+#endif
 
 const int MAX_GAMEMOVES = 2048;
 const int INV = 33; // invalid square
@@ -34,7 +38,6 @@ inline int SQ(int x, int y) { return y * 8 + x; }
 const int NUM_BOARD_SQUARES = 32;
 const int NUM_PIECE_TYPES = 12; // not really 12 but this is what TT was at. Check what is actually needed.
 
-// TODO : where to put this?
 // Aligned malloc and free for MSVC and GCC
 template<typename T>
 inline T* AlignedAllocUtil(size_t count, size_t align)

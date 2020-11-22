@@ -167,7 +167,7 @@ int NeuralNetLearner::ImportLatestMatches(MatchResults& results)
 {
 	std::string matchDir = "C:/Users/Jon/Documents/Martin Fierz/CheckerBoard/games/matches/";
 	std::vector<std::string> filenums = { "", "[1]", "[2]", "[3]", "[4]", "[5]", "[6]", "[7]", "[8]", "[9]", "[10]" };
-	std::string outputFilename = "../Training/guiNN204-Cake188.pdn";
+	std::string outputFilename = "../Training/guiNN204-gui111.pdn";
 	
 	int importedFileCount = 0;
 	int wins = 0, losses = 0, draws = 0;
