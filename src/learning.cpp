@@ -80,7 +80,7 @@ void NeuralNetLearner::ConvertGamesToPositions( std::vector<std::string> pdnFile
 					replayBoard.DoMove(transcript.moves[i]);
 					i++;
 
-					// skip positions with jumps possible, won't be leaf anyway and tough to eval
+					// skip positions with jumps possible, qsearch will search them and tough to eval
 					if (replayBoard.Bitboards.GetJumpers(replayBoard.sideToMove)) { continue; }
 
 					// endgame database should take care of these positions
@@ -151,12 +151,16 @@ void NeuralNetLearner::CreateTrainingSet()
 
 	ConvertGamesToPositions(
 		{/* "../Training/match1.pdn",*/
-		  "../Training/match2.pdn",
+		  //"../Training/match2.pdn",
 		  "../Training/match3.pdn",
 		  "../Training/match4.pdn",
 		  "../Training/match5.pdn",
 		  "../Training/match6.pdn",
 		  "../Training/match7.pdn",
+		  "../Training/match8.pdn",
+		  "../Training/match9.pdn",
+		  "../Training/match10.pdn",
+		  //"../Training/match11.pdn",
 		},
 		positionSet
 	);
@@ -167,7 +171,7 @@ int NeuralNetLearner::ImportLatestMatches(MatchResults& results)
 {
 	std::string matchDir = "C:/Users/Jon/Documents/Martin Fierz/CheckerBoard/games/matches/";
 	std::vector<std::string> filenums = { "", "[1]", "[2]", "[3]", "[4]", "[5]", "[6]", "[7]", "[8]", "[9]", "[10]" };
-	std::string outputFilename = "../Training/guiNN204-gui111.pdn";
+	std::string outputFilename = "../Training/match11.pdn";
 	
 	int importedFileCount = 0;
 	int wins = 0, losses = 0, draws = 0;

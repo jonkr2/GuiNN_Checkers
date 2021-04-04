@@ -39,11 +39,14 @@ struct TEntry
 
 				switch (FailType())
 				{
-				case TT_EXACT: value = tempVal;  // Exact value
+				case TT_EXACT: 
+					value = tempVal;
 					break;
-				case TT_FAIL_LOW: if (tempVal <= alpha) value = tempVal; // Alpha Bound (check to make sure it's usuable)
+				case TT_FAIL_LOW: 
+					if (tempVal <= alpha) value = tempVal; // Alpha Bound (check to make sure it's usuable)
 					break;
-				case TT_FAIL_HIGH: if (tempVal >= beta) value = tempVal; // Beta Bound (check to make sure it's usuable)
+				case TT_FAIL_HIGH: 
+					if (tempVal >= beta) value = tempVal; // Beta Bound (check to make sure it's usuable)
 					break;
 				}
 			}
@@ -88,6 +91,13 @@ struct TEntry
 
 	inline uint8_t FailType() { return m_ageAndFailtype >> 6; }
 	inline uint8_t Age() { return (m_ageAndFailtype & 63); }
+
+	int inline GetTestEval()
+	{
+		if (m_searchEval == INVALID_VAL) { return m_boardEval; }
+		bool preferSearchEval = (FailType() == TT_EXACT || (FailType() == TT_FAIL_HIGH && m_searchEval > m_boardEval) || (FailType() == TT_FAIL_LOW && m_searchEval < m_boardEval));
+		return preferSearchEval ? m_searchEval : m_boardEval;
+	}
 };
 
 // Buckets of entries. Choose which entry to overwrite, if they are all filled. Mainly helpful in case of ttable saturation.
@@ -103,6 +113,8 @@ struct TBucket
 		TEntry* bestEntry = &entries[0];
 		for (int i = 0; i < ENTRIES_PER_BUCKET; i++)
 		{
+			int score;
+
 			// If we find a match or empty entry, use it
 			if (entries[i].IsBoard(hashKey) || entries[i].m_checksum == 0)
 			{
@@ -111,13 +123,16 @@ struct TBucket
 			}
 			
 			// Otherwise use the best entry based on depth and failtype
-			int ageDiff = abs(entries[i].Age() - searchAge);
-			int score = - entries[i].m_depth 
-						- (entries[i].FailType() == TEntry::TT_EXACT) ? 10 : 0;
-						+ (ageDiff > 1) ? 100 : (ageDiff == 1) ? 4 : 0;
+			int ageDiff = searchAge - entries[i].Age();
+			if (ageDiff < 0)
+				ageDiff += 64;
+
+			score = -entries[i].m_depth;
+			score -= (entries[i].FailType() == TEntry::TT_EXACT) ? 10 : 0;
+			score += (ageDiff > 1) ? 100 : (ageDiff == 1) ? 4 : 0;
 			if (score > bestScore)
 			{
-				score = bestScore;
+				bestScore = score;
 				bestEntry = &entries[i];
 			}
 		}
@@ -160,6 +175,8 @@ struct TranspositionTable
 		sizeMb = _sizeMb;
 		numBuckets = ((size_t)sizeMb * (1 << 20)) / sizeof(TBucket);
 		buckets = AlignedAllocUtil<TBucket>(numBuckets, 64);
+		if (buckets != nullptr)
+			Clear();
 
 		return (buckets != nullptr);
 	}
@@ -172,12 +189,9 @@ struct TranspositionTable
 
 	static void CreateHashFunction()
 	{
-		// Note : the hash function is also used for opening book, so if it change the opening book won't find positions
-		for (int i = 0; i < NUM_BOARD_SQUARES; i++)
-			for (int x = 0; x < NUM_PIECE_TYPES; x++)
-			{
-				HashFunction[i][x] = Rand64();
-			}
-		HashSTM = Rand64();
+		/* Changed to a compile time table because of differences in rand() seeding between
+		 * various runtime environments.
+		 */
+		HashSTM = HashFunction[0][0];
 	}
 };

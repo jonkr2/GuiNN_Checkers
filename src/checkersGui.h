@@ -10,6 +10,7 @@ public:
 	void PastePosition() override;
 	void PasteTranscript() override;
 	std::string GetTranscriptFileType() override;
+	void get_eval_string(const Board& board, std::string &evalstr);
 	void DisplayEvaluation(const Board& board) override;
 	void ClearSelection() override;
 

@@ -3,14 +3,14 @@
 #include <cstdint>
 #include <string>
 
-#define USE_AVX // Need to compile without AVX for older CPUs
+#define USE_AVX2 // Need to compile without AVX for older CPUs
 #define USE_SSE2 // I think all 64-bit PCs have SSE2, so no reason to turn this off
 // #define NO_POP_COUNT // for very old processors that have no hardware popcount instruction
 
-#ifdef USE_AVX
-static const char* g_VersionName = "GuiNN Checkers 2.04 avx2";
+#ifdef USE_AVX2
+static const char* g_VersionName = "GuiNN Checkers 2.06 avx2";
 #else
-static const char* g_VersionName = "GuiNN Checkers 2.04";
+static const char* g_VersionName = "GuiNN Checkers 2.06";
 #endif
 
 const int MAX_GAMEMOVES = 2048;

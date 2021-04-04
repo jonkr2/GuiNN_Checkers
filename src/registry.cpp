@@ -8,6 +8,8 @@
 #define USE_BOOK_NAME "UseBook"
 #define DBPATH_NAME "DBPath"
 #define ENABLE_WLD_NAME "enable_wld"
+#define DBMBYTES_NAME "dbmbytes"
+#define MAX_DBPIECES_NAME "max_dbpieces"
 
 
 /*
@@ -128,6 +130,21 @@ void save_enable_wld(int enable_wld)
 
 
 /*
+ * Save the dbmbytes size in the registry.
+ */
+void save_dbmbytes(int val)
+{
+	reg_set_int(DBMBYTES_NAME, val);
+}
+
+
+void save_max_dbpieces(int val)
+{
+	reg_set_int(MAX_DBPIECES_NAME, val);
+}
+
+
+/*
  * Get the hashtable size from the registry.
  * Return non-zero if key not found or other error.
  */
@@ -152,6 +169,22 @@ int get_dbpath(char *path, int maxlen)
 int get_enable_wld(int *enable_wld)
 {
 	return(reg_get_int(ENABLE_WLD_NAME, enable_wld));
+}
+
+
+/*
+ * Get the dbmbytes size from the registry.
+ * Return non-zero if key not found or other error.
+ */
+int get_dbmbytes(int *size)
+{
+	return(reg_get_int(DBMBYTES_NAME, size));
+}
+
+
+int get_max_dbpieces(int *size)
+{
+	return(reg_get_int(MAX_DBPIECES_NAME, size));
 }
 
 

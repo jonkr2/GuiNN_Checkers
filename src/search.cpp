@@ -8,9 +8,15 @@
 
 #include <stdlib.h>
 #include <algorithm>
-
+#include "cb_interface.h"
 #include "engine.h"
 #include "guiWindows.h"
+#include "kr_db.h"
+
+const int kPruneVerifyDepthReduction = 4;
+const int kPruneEvalMargin = 28;
+
+const int kLmrMoveCount = 3;
 
 // -------------------------------------------------
 // Repetition Testing
@@ -91,7 +97,7 @@ int QuiesceBoard(SearchThreadData& search, int ply, int alpha, int beta )
 	{
 		search.displayInfo.selectiveDepth = std::max(search.displayInfo.selectiveDepth, ply-1 );
 
-		return inBoard.EvaluateBoard( ply-1, search, stack[ply-1].netInfo );
+		return inBoard.EvaluateBoard( ply-1, search, stack[ply-1].netInfo, 0 );
 	}
 
 	// There are jump moves, so we keep searching. 
@@ -196,8 +202,9 @@ int ABSearch( SearchThreadData& search, int32_t ply, int32_t depth, int32_t alph
 	const int startAlpha = alpha;
 
 	// Find possible moves (and set a couple variables)
-	const eColor color = stack[ply - 1].board.sideToMove;
-	moveList.FindMoves( stack[ply-1].board );
+	Board &board_in = stack[ply - 1].board;
+	const eColor color_in = board_in.sideToMove;
+	moveList.FindMoves(board_in);
 
 	if (moveList.numMoves == 0) { 
 		return -WinScore( ply - 1 ); // If you can't move, you've already lost the game
@@ -205,6 +212,29 @@ int ABSearch( SearchThreadData& search, int32_t ply, int32_t depth, int32_t alph
 	alpha = std::max(alpha, -WinScore(ply));
 	if (alpha >= beta) return alpha;
 	if (alpha >= WinScore(ply)) return alpha; // have a guaranteed faster win already, so don't waste time searching
+
+	/* Check for egdb cutoff at interior nodes. */
+	if (ply > 2 && engine.dbInfo.type == dbType::KR_WIN_LOSS_DRAW && engine.dbInfo.InDatabase(board_in)) {
+		int egdb_score;
+		EGDB_BITBOARD bb;
+
+		gui_to_kr(board_in.Bitboards, bb);
+		int result = engine.dbInfo.kr_wld->lookup(engine.dbInfo.kr_wld, &bb, gui_to_kr_color(color_in), depth <= 3);
+		if (result == EGDB_WIN) {
+			search.displayInfo.databaseNodes++;
+			egdb_score = board_in.dbWinEval(color_in == WHITE ? WHITEWIN : BLACKWIN);
+			egdb_score = to_rel_score(egdb_score, color_in);
+
+			// This might be aggressive, as it might be possible for the score to temporarily go down by
+			// searching deeper. But it's a db win, and the endgame heuristic score will usually only go up.
+			if (egdb_score >= beta)
+				return(beta);
+		}
+		else if (result == EGDB_DRAW) {
+			search.displayInfo.databaseNodes++;
+			return(0);
+		}
+	}
 
 	// Use killer as predictedBest if we don't have it from some other method
 	if (predictedBestmove == NO_MOVE && moveList.numJumps == 0 && killerMove != NO_MOVE) {
@@ -236,7 +266,7 @@ int ABSearch( SearchThreadData& search, int32_t ply, int32_t depth, int32_t alph
 
 		if (ply == 1) 
 		{
-			const int newEval = (color == WHITE) ? alpha : -alpha; // eval from red's POV
+			const int newEval = (color_in == WHITE) ? alpha : -alpha; // eval from red's POV
 			FirstPlyMoveUpdate( search, newEval, bestmove, movesSearched );
 		}
 			 
@@ -267,14 +297,14 @@ int ABSearch( SearchThreadData& search, int32_t ply, int32_t depth, int32_t alph
 		if (moveList.numJumps > 0 &&
 			(isPV || (ply > 1 && stack[ply - 1].moveList.numJumps > 0)))
 			nextDepth++; // Any jump "recapture" or jump on PV
-		else if (nextDepth == 0 && board.Bitboards.GetJumpers(color))
+		else if (nextDepth == 0 && board.Bitboards.GetJumpers(color_in))
 			nextDepth++; // On leaf when there is a jump threatened
 	
 		if (ply > 1 && board.reversibleMoves > 78 && board.Bitboards.GetJumpers(board.sideToMove) == 0) 
 		{ 
 			value = 0;  // draw by 40-move rule value.. Not sure actual rules checkerboard calls draws this way sometimes though
 		}
-		else if (nextDepth >= 1 && ply > 1 && Repetition(board.hashKey, search.boardHashHistory, engine.transcript.numMoves - 24, engine.transcript.numMoves + ply))
+		else if (nextDepth >= 1 && ply > 1 && Repetition(board.hashKey, search.boardHashHistory, engine.transcript.numMoves + ply - board.reversibleMoves, engine.transcript.numMoves + ply))
 		{
 			value = 0; 	// If this is the repetition of a position that has occured already in the search, return a draw score
 		}
@@ -285,6 +315,7 @@ int ABSearch( SearchThreadData& search, int32_t ply, int32_t depth, int32_t alph
 	    }
         else 
 		{	
+
 			// If this isn't the max depth continue to look ahead 
 			Move nextBestmove = NO_MOVE;
 			int boardEval = INVALID_VAL;
@@ -304,26 +335,25 @@ int ABSearch( SearchThreadData& search, int32_t ply, int32_t depth, int32_t alph
 				// DATABASE : Stop searching if we know the exact value from the database
 				if (engine.dbInfo.InDatabase( board ) )
 				{
-					if (boardEval == INVALID_VAL) { boardEval = -board.EvaluateBoard(ply, search, stack[ply].netInfo ); }
+					if (boardEval == INVALID_VAL) { boardEval = -board.EvaluateBoard(ply, search, stack[ply].netInfo, nextDepth); }
 					if (boardEval == 0 || (engine.dbInfo.type == dbType::EXACT_VALUES && abs(boardEval) > MIN_WIN_SCORE) )
 						value = boardEval;
 				}
 
 				// PRUNING : Prune this move if the eval is enough above beta and shallower verification search passes
-				if (!isPV && value == INVALID_VAL && beta > -1500)
+				if (!isPV && value == INVALID_VAL && beta > -1500 && (!engine.dbInfo.loaded || board.TotalPieces() > engine.dbInfo.numPieces))
 				{
-					const int evalMargin = 28;
-					const int verifyDepth = std::max(nextDepth - 4, 1);
 					if (boardEval == INVALID_VAL) {
-						boardEval = -board.EvaluateBoard(ply, search, stack[ply].netInfo );
+						boardEval = -board.EvaluateBoard(ply, search, stack[ply].netInfo, nextDepth);
 						if (ttEntry) { ttEntry->m_boardEval = boardEval; }
 					}
 
-					if (boardEval >= beta + evalMargin )
+					if (boardEval >= beta + kPruneEvalMargin)
 					{
-						int verifyValue = -ABSearch( search, ply + 1, verifyDepth, -(beta + evalMargin + 1), -(beta + evalMargin), false, nextBestmove);
+						const int verifyDepth = std::max(nextDepth - kPruneVerifyDepthReduction, 1);
+						int verifyValue = -ABSearch( search, ply + 1, verifyDepth, -(beta + kPruneEvalMargin + 1), -(beta + kPruneEvalMargin), false, nextBestmove);
 						if (verifyValue == -TIMEOUT) return TIMEOUT;
-						if (verifyValue > beta + evalMargin) value = verifyValue;
+						if (verifyValue > beta + kPruneEvalMargin) value = verifyValue;
 					}
 				}
 			}
@@ -332,7 +362,7 @@ int ABSearch( SearchThreadData& search, int32_t ply, int32_t depth, int32_t alph
             if (value == INVALID_VAL)
 			{
 				// 1-ply LMR when not on pv
-				const bool doLMR = !isPV && moveList.numJumps == 0 && movesSearched > 2;
+				const bool doLMR = !isPV && moveList.numJumps == 0 && movesSearched >= kLmrMoveCount;
 
 				// Principal Variation Search - if this isn't first move on PV, use a search window width of 1
 				if (!isPV || movesSearched > 1)
@@ -402,7 +432,7 @@ BestMoveInfo ComputerMove( Board &InBoard, SearchThreadData& search )
 	int LastEval = 0;
 	Move bestmove = NO_MOVE;
 	Move doMove = NO_MOVE;
-	engine.ttAge = (engine.ttAge + 1) % 63; // fit into 6 bits to store in tt
+	engine.ttAge = (engine.ttAge + 1) & 63; // fit into 6 bits to store in tt
 	
 	MoveList& moveList = search.stack[1].moveList;
 
@@ -419,8 +449,10 @@ BestMoveInfo ComputerMove( Board &InBoard, SearchThreadData& search )
 	search.ClearStack();
 	search.stack[0].netInfo.netIdx = -1; // Set to invalid net to force initial computation
 	memcpy(search.boardHashHistory, engine.boardHashHistory, sizeof(search.boardHashHistory));
+	search.displayInfo.eval = BOOK_INVALID_VALUE;
+	if (checkerBoard.useOpeningBook != CB_BOOK_NONE)
+		search.displayInfo.eval = engine.openingBook->GetMove( InBoard, bestmove );
 
-	search.displayInfo.eval = engine.openingBook->GetMove( InBoard, bestmove );
 	if ( bestmove != NO_MOVE) {
 		doMove = bestmove;
 	}
@@ -471,7 +503,8 @@ BestMoveInfo ComputerMove( Board &InBoard, SearchThreadData& search )
 				}
 				else
 				{
-					if (abs(search.displayInfo.eval) < 3000) { LastEval = search.displayInfo.eval; }
+					// Replace TIMEOUT with eval from previously completed search
+					if (abs(search.displayInfo.eval) < 3000) { LastEval = (InBoard.sideToMove == BLACK) ? -search.displayInfo.eval : search.displayInfo.eval; }
 					break;
 				}
 
@@ -485,7 +518,9 @@ BestMoveInfo ComputerMove( Board &InBoard, SearchThreadData& search )
 		}
 	}
 
-	if (checkerBoard.bActive && doMove == NO_MOVE) doMove = moveList.moves[ 0 ];
+	if (checkerBoard.bActive && doMove == NO_MOVE) {
+		doMove = moveList.moves[0];
+	}
 
 	if (!engine.bStopThinking) {
 		RunningDisplay(search.displayInfo, doMove, 0);

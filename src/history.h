@@ -11,7 +11,7 @@ struct HistoryTable
 		return pieceType[piece] + dir * 4 + src * 16;
 	}
 
-	void inline UpdateScore(int16_t& score, int delta)
+	inline void UpdateScore(int16_t& score, int delta)
 	{
 		// Adjust this value, while protecting it from overflow/underflow
 		//score = ClampInt(score + delta, -HISTORY_MAX+1, HISTORY_MAX);
@@ -49,7 +49,7 @@ struct HistoryTable
 	}
 
 	static constexpr int pieceType[8] = { 0, 0, 1, 0, 0, 2, 3, 0 };
-	static constexpr int HISTORY_MAX = (1 << 15);
+	static constexpr int HISTORY_MAX = (1 << 14);
 	static constexpr int PIECE_DIR_SRC_SIZE = 4 * 4 * 32; // pieceType, move direction, source square
 
 	int16_t history[PIECE_DIR_SRC_SIZE];
@@ -86,11 +86,11 @@ static void HistorySort(HistoryTable& historyTable, MoveList& moveList, int star
 	}
 }
 
-static void UpdateHistory(HistoryTable& historyTable, const Move& bestMove, int depth, const Board& board, int ply, int prevOppMoveIdx, int prevOwnMoveIdx, Move searchedMoves[], int numSearched)
+static inline void UpdateHistory(HistoryTable& historyTable, const Move& bestMove, int depth, const Board& board, int ply, int prevOppMoveIdx, int prevOwnMoveIdx, Move searchedMoves[], int numSearched)
 {
 	if (depth > 1)
 	{
-		int adjust = std::min(depth * (depth - 1), 15 * 15);
+		int adjust = std::min(depth * (depth-1), 14 * 14) * 8;
 		int src = bestMove.Src();
 		historyTable.AdjustHistory(src, bestMove.Dir(), board.GetPiece(src), prevOppMoveIdx, prevOwnMoveIdx, adjust);
 

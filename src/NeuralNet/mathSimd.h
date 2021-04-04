@@ -5,6 +5,7 @@
 #pragma once
 
 #include <assert.h>
+#include <algorithm>
 #include <nmmintrin.h>
 #ifndef __GNUC__
 #include <intrin.h>
@@ -39,7 +40,7 @@ public:
 		assert((count & 7) == 0);
 		const int32_t* const v1End = v1 + count;
 
-#if defined(USE_AVX)
+#if defined(USE_AVX2)
 		__m256i dotSum = _mm256_setzero_si256();
 
 		for (; v1 < v1End; v1 += 8, v2 += 8)
@@ -83,7 +84,7 @@ public:
 		assert(((int64_t)v2 & 31) == 0);
 		const int16_t* const v1End = v1 + count;
 
-#if defined(USE_AVX)
+#if defined(USE_AVX2)
 		__m256i dotSum = _mm256_setzero_si256();
 		for (; v1 < v1End; v1 += 16, v2 += 16)
 		{
@@ -156,7 +157,7 @@ public:
 		assert(((int64_t)v1 & 31) == 0);
 		const int16_t* v1End = v1 + count;
 
-#if defined(USE_AVX)
+#if defined(USE_AVX2)
 		for (; v1 < v1End; v1 += 16, v2 += 16)
 		{
 			const __m256i temp1 = _mm256_load_si256((__m256i*)v1);	// Load the 16 values from v1
@@ -184,7 +185,7 @@ public:
 		assert((count & 7) == 0);
 		const int32_t* v1End = v1 + count;
 
-#if defined(USE_AVX)
+#if defined(USE_AVX2)
 		for (; v1 < v1End; v1 += 8, v2 += 8)
 		{
 			const __m256i temp1 = _mm256_load_si256((__m256i*)v1);	// Load the 8 values from v1
@@ -202,7 +203,7 @@ public:
 #else
 		for (; v1 < v1End; v1++, v2++)
 		{
-			*v1 = *v1 + *v2;
+			*v1 += *v2;
 		}
 #endif
 	}
@@ -213,7 +214,7 @@ public:
 		assert((count & 15) == 0);
 		const int16_t* v1End = v1 + count;
 
-#if defined(USE_AVX)
+#if defined(USE_AVX2)
 		for (; v1 < v1End; v1 += 16, v2 += 16)
 		{
 			const __m256i temp1 = _mm256_load_si256((__m256i*)v1);	// Load the 16 values from v1
@@ -230,7 +231,7 @@ public:
 #else
 		for (; v1 < v1End; v1++, v2++)
 		{
-			*v1 = *v1 + *v2;
+			*v1 -= *v2;
 		}
 #endif
 	}
@@ -241,7 +242,7 @@ public:
 		assert((count & 7) == 0);
 		const int32_t* oEnd = o + count;
 
-#if defined(USE_AVX)
+#if defined(USE_AVX2)
 		__m256i iVal = _mm256_set_epi32(val, val, val, val, val, val, val, val);
 
 		for (; o < oEnd; o += 8, weights += 8)
@@ -263,7 +264,7 @@ public:
 	{
 		const int16_t* v1End = v1 + count;
 
-#if defined(USE_AVX)
+#if defined(USE_AVX2)
 		__m256i zero = _mm256_setzero_si256();
 		for (; v1 < v1End; v1 += 16)
 		{
@@ -285,11 +286,12 @@ public:
 #endif 
 	}
 
+	// This is not used anymore, need to check it over if used
 	static inline void clamp0Vec32(int32_t* v1, size_t count)
 	{
 		const int32_t* v1End = v1 + count;
 
-#if defined(USE_AVX)
+#if defined(USE_AVX2)
 		__m256i zero = _mm256_setzero_si256();
 		for (; v1 < v1End; v1 += 8)
 		{
@@ -301,42 +303,46 @@ public:
 		for (; v1 < v1End; v1 += 4)
 		{
 			const __m128i temp1 = _mm_load_si128((__m128i*)v1);	// Load the 4 values from v1
+			// _mm_max_epi32 is SSE4
 			_mm_store_si128((__m128i*)v1, _mm_max_epi32(temp1, zero)); // clamp to >= 0
 		}
 #else
-		for (uint32_t o = 0; o < count; o++)
+		for (; v1 < v1End; v1++)
 		{
-			v1[o] = std::max(v1[o], (int32_t)0);
+			*v1 = std::max(*v1, (int32_t)0);
 		}
 #endif 
 	}
 
 	// Converts to 32-bit v1 to 16-bit v2, including doing a right-shift 
-	static inline void convertVec32to16(int32_t* v1, int16_t* v2, const int shift, size_t count)
+	static inline void convertVec32to16clamp0(int32_t* v1, int16_t* v2, const int shift, size_t count)
 	{
 		assert((count & 15) == 0);
 		const int32_t* v1End = v1 + count;
 
-#if defined(USE_AVX)
+#if defined(USE_AVX2)
+		__m256i zero = _mm256_setzero_si256();
 		for (; v1 < v1End; v1 += 16, v2 += 16)
 		{
 			__m256i a = _mm256_load_si256((__m256i*)v1); // load 16 values (32-bit)
 			__m256i b = _mm256_load_si256((__m256i*)(v1 + 8));
 			a = _mm256_srai_epi32(a, shift); // shift right 
 			b = _mm256_srai_epi32(b, shift);
-			__m256i result = _mm256_packus_epi32(a, b); // pack into 16 values (16-bit)
+			__m256i result = _mm256_packs_epi32(a, b); // pack into 16 values (16-bit)
 			result = _mm256_permute4x64_epi64(result, 0xD8);
-			_mm256_store_si256((__m256i*)v2, result); // and write into v2
+			_mm256_store_si256((__m256i*)v2, _mm256_max_epi16(result, zero)); // clamp to >= 0 and write into v2
 		}
 #elif defined(USE_SSE2)
+		__m128i zero = _mm_setzero_si128();
 		for (; v1 < v1End; v1 += 8, v2 += 8)
 		{
 			__m128i a = _mm_load_si128((__m128i*)v1); // load 8 values (32-bit)
 			__m128i b = _mm_load_si128((__m128i*)(v1 + 4));
 			a = _mm_srai_epi32(a, shift); // shift right 
 			b = _mm_srai_epi32(b, shift);
-			_mm_store_si128((__m128i*)v2, _mm_packus_epi32(a, b));  // pack into 8 values (16-bit) in v2
-	}
+			// pack into 8 values (16-bit) in v2, and also clamp to >= 0
+			_mm_store_si128((__m128i*)v2, _mm_max_epi16(_mm_packs_epi32(a, b), zero));
+		}
 #else
 		for (; v1 < v1End; v1++, v2++)
 			*v2 = (int16_t)(*v1 >> shift);

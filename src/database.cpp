@@ -372,6 +372,17 @@ void InitializeGuiDatabases( SDatabaseInfo& dbInfo )
 	*/
 }
 
+
+void close_gui_databases(SDatabaseInfo &dbInfo)
+{
+	if (ResultsFour != nullptr) {
+		free(ResultsFour);
+		ResultsFour = nullptr;
+	}
+	dbInfo.loaded = false;
+}
+
+
 void GenAllDatabases( )
 {
 	ComputeAllIndices();

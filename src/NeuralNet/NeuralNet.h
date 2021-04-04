@@ -8,8 +8,8 @@
 
 #include "mathSimd.h"
 
-enum class eActivation { RELU, LINEAR };
-enum class eLayout { INPUTS_TO_OUTPUT, INPUT_TO_OUTPUTS };
+enum class eActivation { RELU, NONE };
+enum class eLayout { DENSE, SPARSE_INPUTS };
 
 const int kFixedShift = 8;
 const float kFixedFloatMult = 256.0f;
@@ -49,41 +49,41 @@ struct NetworkTransform
 	}
 	
 	// Transform input network to output network using weights and biases
-	void Transform(T Inputs[], T Outputs[])
+	void Transform(T Inputs[], T Outputs[]) const
 	{
 		assert(Inputs && Outputs);
 		const T* weightsForOutput = &Weights[weightStart];
 
 		// Build outputs in int32s starting with bias
 		alignas(64) int32_t OutputsTemp[kMaxValuesInLayer];
-		memcpy( OutputsTemp, biases32, outputCount * sizeof(int32_t) );
+		memcpy(OutputsTemp, biases32, outputCount * sizeof(int32_t));
 
 		// Sum the weighted inputs for this output
-		for (uint32_t o = 0; o < outputCount; o++, weightsForOutput += inputCount)
-		{					
-			OutputsTemp[o] += SIMD::dotProductInt16(weightsForOutput, Inputs, inputCount);
-			assert( (OutputsTemp[o] >> kFixedShift) < kFixedMax);
+		const int32_t* end = &OutputsTemp[outputCount];
+		for (int32_t* out = OutputsTemp; out < end; out++, weightsForOutput += inputCount)
+		{
+			*out += SIMD::dotProductInt16(weightsForOutput, Inputs, inputCount);
+			//assert((*out >> kFixedShift) < kFixedMax); // note : simd 32->16 saturates so hopefully not big deal if a few values goes over
 		}
 
 		if (activationType == eActivation::RELU)
 		{
-			SIMD::clamp0Vec32(OutputsTemp, outputCount); // don't let values go below 0
-			SIMD::convertVec32to16(OutputsTemp, Outputs, kFixedShift, outputCount);
+			SIMD::convertVec32to16clamp0(OutputsTemp, Outputs, kFixedShift, outputCount);
 		}
-		else 
+		else
 		{
 			for (uint32_t o = 0; o < outputCount; o++)
 				Outputs[o] = ClampInt(OutputsTemp[0] >> kFixedShift, -kFixedMax, kFixedMax);
 		}
 	}
 
-	void inline SetOutputsToBias(T Outputs[] )
+	void inline SetOutputsToBias(T Outputs[] ) const
 	{
 		memcpy(Outputs, &Weights[biasStart], sizeof(T) * outputCount);
 	}
 
 	// NOTE : Not currently using this function. It adds inputs the 1 inputs
-	void TransformInputToOutput(T Inputs[], T Outputs[])
+	void TransformInputToOutput(T Inputs[], T Outputs[]) const
 	{
 		// Set the outputs to start at their biases.
 		SetOutputsToBias(Outputs);
@@ -93,20 +93,17 @@ struct NetworkTransform
 		{
 			// If this is just 1s and 0s
 			if (Inputs[i] > 0 ) {
-				AddInput( i, Inputs, Outputs);
+				AddInput( i, Outputs);
 			}
 		}
 
-		// this shift could be simd
-		for (uint32_t o = 0; o < outputCount; o++ )
-		{
-			Outputs[o] = (int32_t)Outputs[o] >> kFixedShift;
-		}
+		// If we need this, then have to use 32-bit intermediate 
+		// SIMD::convertVec32to16(OutputsTemp, Outputs, kFixedShift, outputCount);
 
 		TransformActivateOnly( Outputs );
 	}
 
-	void TransformActivateOnly(T Outputs[])
+	void TransformActivateOnly(T Outputs[]) const
 	{
 		if (activationType == eActivation::RELU)
 		{
@@ -114,24 +111,24 @@ struct NetworkTransform
 		}
 	}
 
-	inline void AddInput(int i, T Inputs[], T Outputs[])
+	inline void AddInput(int i, T Inputs[], T Outputs[]) const
 	{
-		assert(i >= 0 && i < inputCount);
+		assert(i >= 0 && i < (int)inputCount);
 		Inputs[i] = 1; // Note : only doing 1s and 0s which is quicker, would have to refactor to support other value
 
 		SIMD::addVec16(Outputs, &Weights[weightStart + i * outputCount], outputCount);
 	}
 
 	// For incremental updates of first layer values
-	inline void AddInput(int i, T Outputs[])
+	inline void AddInput(int i, T Outputs[]) const
 	{
-		assert(i >= 0 && i < inputCount);
+		assert(i >= 0 && i < (int)inputCount);
 		SIMD::addVec16(Outputs, &Weights[weightStart + i * outputCount], outputCount);
 	}
 
-	inline void RemoveInput(int i, T Outputs[])
+	inline void RemoveInput(int i, T Outputs[]) const
 	{
-		assert(i >= 0 && i < inputCount);
+		assert(i >= 0 && i < (int)inputCount);
 		SIMD::subVec16( Outputs, &Weights[weightStart + i * outputCount], outputCount );
 	}
 
@@ -141,7 +138,7 @@ struct NetworkTransform
 	uint32_t OutputCount() const  { return outputCount; }
 	inline int WeightIdx(int input, int output) const
 	{
-		if ( layoutType == eLayout::INPUTS_TO_OUTPUT)
+		if ( layoutType == eLayout::DENSE)
 			return weightStart + inputCount * output + input;
 		else 
 			return weightStart + output + input * outputCount;
@@ -167,24 +164,8 @@ struct NetworkTransform
 		return count == WeightCount();
 	}
 
-	void InitRandom()
-	{
-		/*for (uint32_t i = weightStart; i < weightStart + inputCount * outputCount; i++)
-		{
-			uint32_t r = RandGen.Rand32() % 2048;
-			double rd = (r - 1024.0) / 1024.0;
-			rd *= sqrt(6.0f) / sqrt((float)(inputCount + outputCount));
-			Weights[i] = (T)rd;
-		}
-
-		for (uint32_t i = biasStart; i < biasStart + outputCount; i++)
-		{
-			Weights[i] = (T)0;
-		}*/
-	}
-
 	eActivation activationType = eActivation::RELU;
-	eLayout layoutType = eLayout::INPUTS_TO_OUTPUT;
+	eLayout layoutType = eLayout::DENSE;
 };
 
 class NetworkLayer
@@ -200,7 +181,7 @@ public:
 
 	int outputCount = 0;
 	eActivation activationType = eActivation::RELU;
-	eLayout layoutType = eLayout::INPUTS_TO_OUTPUT;
+	eLayout layoutType = eLayout::DENSE;
 
 	// Value array is in NeuralNetwork, this is the start index
 	int outputValueStart = 0;
@@ -219,11 +200,11 @@ public:
 		}
 	}
 
-	T Sum(T InputLayer[]);
-	T SumHiddenLayers(T InputLayer[]);
+	void Sum(T InputLayer[], T FinalOutputs[]) const;
+	void SumHiddenLayers(T Inputs[], T TempValues[], T FinalOutputs[]) const;
 
 	void SetInputCount(int inInputCount) { inputCount = inInputCount; }
-	void AddLayer(int outputCount, eActivation activationType, eLayout layoutType = eLayout::INPUTS_TO_OUTPUT);
+	void AddLayer(int outputCount, eActivation activationType = eActivation::NONE, eLayout layoutType = eLayout::DENSE);
 	void Build();
 
 	bool Load( const char* filename );
@@ -233,7 +214,9 @@ public:
 
 	// For loading from tensor flow
 	bool LoadText( const char* filename );
+	uint32_t LoadWeightsFromArray(const std::vector<float>& loadedWeights, uint32_t startIdx = 0);
 	int LoadWeightIdx(uint32_t w) const;
+	static bool LoadWeightsFromTextFile(const char* filename, std::vector<float>& loadedWeights);
 
 	std::string PrintWeights() const;
 
@@ -259,11 +242,6 @@ public:
 
 	double GetWeight(int w) const { return Weights[w]; }
 
-	void ResetWeights() 
-	{
-		for (uint32_t l = 0; l < layerCount-1; l++)
-			Transforms[l].InitRandom();
-	}
 	bool IsBias(uint32_t w) const
 	{
 		for (uint32_t l = 0; l < layerCount; l++) {
@@ -272,7 +250,7 @@ public:
 		return false;
 	}
 
-	T* GetLayerOutputValues(int layerIdx, T* Values )
+	inline T* GetLayerOutputValues(int layerIdx, T* Values ) const
 	{
 		if (layerIdx < 0) return &Values[0];
 		return &Values[ Layers[layerIdx].outputValueStart ];
@@ -287,7 +265,7 @@ public:
 	}
 
 	const NetworkLayer* GetLayer(int layer) const { return &Layers[layer]; }
-	NetworkTransform<T>* GetTransform(int layer) { return &Transforms[layer]; }
+	const NetworkTransform<T>* GetTransform(int layer) const { return &Transforms[layer]; }
 
 private:
 	static const int kMaxLayers = 4;
@@ -301,20 +279,19 @@ private:
 	int32_t weightCount = 0;
 };
 
-int InitializeNeuralNets();
-
 struct NeuralNetBase
 {
 	virtual void InitNetwork() = 0;
 	virtual bool IsActive(const struct Board& board) const = 0;
-	virtual void ConvertToInputValues(const Board& board, nnInt_t InputValues[]) = 0;
+	virtual void ConvertToInputValues(const Board& board, nnInt_t InputValues[]) const = 0;
 
-	virtual int ComputeFirstLayerValues(const Board& board, nnInt_t* Values, nnInt_t* firstLayerValues);
-	virtual int GetNNEvalIncremental(const nnInt_t firstLayerValues[], nnInt_t Values[]);
-	virtual int GetNNEval(const Board& board, nnInt_t* Values);
-	virtual int GetNNEval(nnInt_t* Values);
+	virtual int ComputeFirstLayerValues(const Board& board, nnInt_t* Values, nnInt_t* firstLayerValues) const;
+	virtual int GetSumIncremental(const nnInt_t firstLayerValues[], nnInt_t Values[]) const;
+	virtual int GetSum(const Board& board, nnInt_t* Values) const;
+	virtual int GetSum(nnInt_t* Values) const;
 
 	virtual void SetFilenames(std::string name);
+	virtual void LoadText();
 
 	NeuralNetwork<nnInt_t> network;
 	std::string neuralNetFile;
@@ -322,6 +299,7 @@ struct NeuralNetBase
 	std::string trainingPositionFile;
 	std::string trainingLabelFile;
 	std::string structureFile;
+	std::string baseName;
 
 	int whiteInputCount = 0;
 	int blackInputCount = 0;

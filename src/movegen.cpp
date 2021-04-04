@@ -37,80 +37,79 @@ void InitBitTables()
 	}
 }
 
-// Return a bitboard of white pieces that have a possible non-jumping move. 
+// Return a bitboard of pieces of color param that have a possible non-jumping move. 
 // We start with the empty sq bitboard, shift for each possible move directions
 // and or all the directions together to get the movable pieces bitboard.
 uint32_t CheckerBitboards::GetMovers( const eColor color ) const
 {
+	assert(color == WHITE || color == BLACK);
+	uint32_t movers = 0;
 	if (color == WHITE)
 	{
-		uint32_t moves = (empty << 4);
+		movers = (empty << 4);
 		const uint32_t WK = P[WHITE] & K;		  // Kings
-		moves |= ((empty & MASK_L3) << 3);
-		moves |= ((empty & MASK_L5) << 5);
-		moves &= P[WHITE];
+		movers |= ((empty & MASK_L3) << 3);
+		movers |= ((empty & MASK_L5) << 5);
+		movers &= P[WHITE];
 		if (WK) {
-			moves |= (empty >> 4) & WK;
-			moves |= ((empty & MASK_R3) >> 3) & WK;
-			moves |= ((empty & MASK_R5) >> 5) & WK;
+			movers |= (empty >> 4) & WK;
+			movers |= ((empty & MASK_R3) >> 3) & WK;
+			movers |= ((empty & MASK_R5) >> 5) & WK;
 		}
-		return moves;
 	}
-	if (color == BLACK)
+	else // BLACK
 	{
-		uint32_t moves = (empty >> 4);
+		movers = (empty >> 4);
 		const uint32_t BK = P[BLACK] & K;
-		moves |= ((empty & MASK_R3) >> 3);
-		moves |= ((empty & MASK_R5) >> 5);
-		moves &= P[BLACK];
+		movers |= ((empty & MASK_R3) >> 3);
+		movers |= ((empty & MASK_R5) >> 5);
+		movers &= P[BLACK];
 		if (BK) {
-			moves |= (empty << 4) & BK;
-			moves |= ((empty & MASK_L3) << 3) & BK;
-			moves |= ((empty & MASK_L5) << 5) & BK;
+			movers |= (empty << 4) & BK;
+			movers |= ((empty & MASK_L3) << 3) & BK;
+			movers |= ((empty & MASK_L5) << 5) & BK;
 		}
-		return moves;
 	}
-	assert(false);
-	return 0;
+	return movers;
 }
 
-// Return a list of white pieces that have a possible jump move
+// Return a list of pieces of color param that have a possible jump move
 // To do this we start with a bitboard of empty squares and shift it to check each direction for a black piece, 
 // then shift the passing bits to find the white pieces with a jump. Moveable pieces from the different direction checks are or'd together.
 uint32_t CheckerBitboards::GetJumpers( const eColor c ) const
 {
-	uint32_t Movers = 0;
+	uint32_t jumpers = 0;
 	if (c == WHITE)
 	{
 		const uint32_t WK = P[WHITE] & K; // WK = White Kings bitboard
 		uint32_t Temp = (empty << 4) & P[BLACK];
-		Movers |= (((Temp & MASK_L3) << 3) | ((Temp & MASK_L5) << 5));
+		jumpers |= (((Temp & MASK_L3) << 3) | ((Temp & MASK_L5) << 5));
 		Temp = (((empty & MASK_L3) << 3) | ((empty & MASK_L5) << 5)) & P[BLACK];
-		Movers |= (Temp << 4);
-		Movers &= P[WHITE];
+		jumpers |= (Temp << 4);
+		jumpers &= P[WHITE];
 		if (WK) {
 			Temp = (empty >> 4) & P[BLACK];
-			Movers |= (((Temp & MASK_R3) >> 3) | ((Temp & MASK_R5) >> 5)) & WK;
+			jumpers |= (((Temp & MASK_R3) >> 3) | ((Temp & MASK_R5) >> 5)) & WK;
 			Temp = (((empty & MASK_R3) >> 3) | ((empty & MASK_R5) >> 5)) & P[BLACK];
-			Movers |= (Temp >> 4) & WK;
+			jumpers |= (Temp >> 4) & WK;
 		}
 	}
 	else // BLACK
 	{
 		const uint32_t BK = P[BLACK] & K;
 		uint32_t Temp = (empty >> 4) & P[WHITE];
-		Movers |= (((Temp & MASK_R3) >> 3) | ((Temp & MASK_R5) >> 5));
+		jumpers |= (((Temp & MASK_R3) >> 3) | ((Temp & MASK_R5) >> 5));
 		Temp = (((empty & MASK_R3) >> 3) | ((empty & MASK_R5) >> 5)) & P[WHITE];
-		Movers |= (Temp >> 4);
-		Movers &= P[BLACK];
+		jumpers |= (Temp >> 4);
+		jumpers &= P[BLACK];
 		if (BK) {
 			Temp = (empty << 4) & P[WHITE];
-			Movers |= (((Temp & MASK_L3) << 3) | ((Temp & MASK_L5) << 5)) & BK;
+			jumpers |= (((Temp & MASK_L3) << 3) | ((Temp & MASK_L5) << 5)) & BK;
 			Temp = (((empty & MASK_L3) << 3) | ((empty & MASK_L5) << 5)) & P[WHITE];
-			Movers |= (Temp << 4) & BK;
+			jumpers |= (Temp << 4) & BK;
 		}
 	}
-	return Movers;
+	return jumpers;
 }
 
 // -------------------------------------------------
@@ -118,10 +117,10 @@ uint32_t CheckerBitboards::GetJumpers( const eColor c ) const
 // -------------------------------------------------
 void MoveList::FindMoves(Board& board)
 {
-	uint32_t Jumpers = board.Bitboards.GetJumpers( board.sideToMove );
+	uint32_t jumpers = board.Bitboards.GetJumpers( board.sideToMove );
 
-	if (Jumpers) // If there are any jump moves possible
-		FindJumps(board.sideToMove, board.Bitboards, Jumpers); // We fill this movelist with the jump moves
+	if (jumpers) // If there are any jump moves possible
+		FindJumps(board.sideToMove, board.Bitboards, jumpers); // We fill this movelist with the jump moves
 	else
 		FindNonJumps(board.sideToMove, board.Bitboards, board.Bitboards.GetMovers(board.sideToMove)); // Otherwise we fill the movelist with non-jump moves
 }
@@ -173,7 +172,7 @@ void MoveList::FindJumps(const eColor color, CheckerBitboards& B, uint32_t Mover
 }
 
 // Check for a jump
-void MoveList::CheckJumpDir( const eColor color, CheckerBitboards&B, int square, const int DIR_INDEX )
+void inline MoveList::CheckJumpDir( const eColor color, CheckerBitboards&B, int square, const int DIR_INDEX )
 {
 	int jumpSquare = nextSq[square+DIR_INDEX];
 	if ( S[jumpSquare] & B.P[Opp(color)]) // If there is an opponent's piece in this direction

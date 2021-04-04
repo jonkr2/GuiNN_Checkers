@@ -12,6 +12,9 @@
 #include "board.h"
 #include "moveGen.h"
 #include "endgameDatabase.h"
+#include "engine.h"
+
+extern CheckerboardInterface checkerBoard;
 
 /*************************************************************/
 /*                                                           */
@@ -2918,6 +2921,35 @@ unsigned char* g_db4[ 26 ] = { NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, N
 unsigned char* g_db5[ 25 ] = { NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL};
 unsigned char* g_db6[ 17 ] = { NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL };
 
+
+void close_trice_egdb(SDatabaseInfo &dbInfo)
+{
+	struct Dblist {
+		unsigned char **slices;
+		size_t length;
+	};
+	const Dblist table[] = {
+		g_db2, sizeof(g_db2) / sizeof(g_db2[0]),
+		g_db3, sizeof(g_db3) / sizeof(g_db3[0]),
+		g_db4, sizeof(g_db4) / sizeof(g_db4[0]),
+		g_db5, sizeof(g_db5) / sizeof(g_db5[0]),
+		g_db6, sizeof(g_db6) / sizeof(g_db6[0]),
+	};
+
+	if (dbInfo.loaded == true && dbInfo.type == dbType::EXACT_VALUES) {
+		for (size_t i = 0; i < sizeof(table) / sizeof(table[0]); ++i) {
+			for (size_t k = 0; k < table[i].length; ++k) {
+				if (table[i].slices[k] != nullptr) {
+					free(table[i].slices[k]);
+					table[i].slices[k] = nullptr;
+				}
+			}
+		}
+		dbInfo.loaded = false;
+	}
+}
+
+
 void init_g_piece_counts_to_local_slice(void)
 {				
 	/**********************************************************/
@@ -3036,7 +3068,7 @@ void init_g_piece_counts_to_local_slice(void)
 int LoadSingleDatabase( const char *filename, unsigned char** sliceData, int bytes_needed_for_db_slice )
 {
 	char fullFilename[512];
-	sprintf( fullFilename, "database/%s", filename );
+	sprintf( fullFilename, "%s/%s", checkerBoard.db_path, filename );
 	assert( *sliceData == NULL );
 
 	FILE *db_file = fopen( fullFilename ,"rb");
@@ -3205,9 +3237,8 @@ bool LoadEdsDatabase()
 
 	numLoaded += LoadSingleDatabase( "db_06_(0K3C_0K3C)", &g_db6[k_wwwrrr], 7959904 );
 
-	// We're assuming here we want to use the databases as long as a single one is found
-	// (we could also enforce complete databases)
-	if ( numLoaded > 0 )
+	/* Require all 2 through 6 piece slices to be loaded. */
+	if ( numLoaded == 81 )
 		return true;
 
 	return false;

@@ -267,10 +267,10 @@ constexpr dirFlags BackwardLeft[2] = { DIR_DOWN_LEFT, DIR_UP_LEFT };
 // These masks are used in move generation. 
 // They define squares for which a particular shift is possible. 
 // eg. L3 = Left 3 = squares where you can move from src to src+3
-const uint32_t MASK_L3 = S[1] | S[2] | S[3] | S[9] | S[10] | S[11] | S[17] | S[18] | S[19] | S[25] | S[26] | S[27];
-const uint32_t MASK_L5 = S[4] | S[5] | S[6] | S[12] | S[13] | S[14] | S[20] | S[21] | S[22];
-const uint32_t MASK_R3 = S[28] | S[29] | S[30] | S[20] | S[21] | S[22] | S[12] | S[13] | S[14] | S[4] | S[5] | S[6];
-const uint32_t MASK_R5 = S[25] | S[26] | S[27] | S[17] | S[18] | S[19] | S[9] | S[10] | S[11];
+constexpr uint32_t MASK_L3 = S[1] | S[2] | S[3] | S[9] | S[10] | S[11] | S[17] | S[18] | S[19] | S[25] | S[26] | S[27];
+constexpr uint32_t MASK_L5 = S[4] | S[5] | S[6] | S[12] | S[13] | S[14] | S[20] | S[21] | S[22];
+constexpr uint32_t MASK_R3 = S[28] | S[29] | S[30] | S[20] | S[21] | S[22] | S[12] | S[13] | S[14] | S[4] | S[5] | S[6];
+constexpr uint32_t MASK_R5 = S[25] | S[26] | S[27] | S[17] | S[18] | S[19] | S[9] | S[10] | S[11];
 
 constexpr uint32_t SINGLE_EDGE = S[0] | S[1] | S[2] | S[8] | S[16] | S[12] | S[20] | S[29] | S[30] | S[31] | S[23] | S[15];
 constexpr uint32_t CENTER_8 = S[9] | S[10] | S[13] | S[14] | S[17] | S[18] | S[21] | S[22];
