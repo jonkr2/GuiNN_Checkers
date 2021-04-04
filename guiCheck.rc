@@ -1,0 +1,250 @@
+// Microsoft Visual C++ generated resource script.
+//
+#include "resource.h"
+
+#define APSTUDIO_READONLY_SYMBOLS
+/////////////////////////////////////////////////////////////////////////////
+//
+// Generated from the TEXTINCLUDE 2 resource.
+//
+#include "windows.h"
+
+/////////////////////////////////////////////////////////////////////////////
+#undef APSTUDIO_READONLY_SYMBOLS
+
+/////////////////////////////////////////////////////////////////////////////
+// English (United States) resources
+
+#if !defined(AFX_RESOURCE_DLL) || defined(AFX_TARG_ENU)
+LANGUAGE LANG_ENGLISH, SUBLANG_ENGLISH_US
+#pragma code_page(1252)
+
+#ifdef APSTUDIO_INVOKED
+/////////////////////////////////////////////////////////////////////////////
+//
+// TEXTINCLUDE
+//
+
+1 TEXTINCLUDE 
+BEGIN
+    "resource.h\0"
+END
+
+2 TEXTINCLUDE 
+BEGIN
+    "#include ""afxres.h""\r\n"
+    "\0"
+END
+
+3 TEXTINCLUDE 
+BEGIN
+    "\r\n"
+    "\0"
+END
+
+#endif    // APSTUDIO_INVOKED
+
+
+/////////////////////////////////////////////////////////////////////////////
+//
+// Menu
+//
+
+CHECKMENU MENU
+BEGIN
+    POPUP "&Game"
+    BEGIN
+        MENUITEM "&New Game",                   ID_GAME_NEW
+        MENUITEM SEPARATOR
+        MENUITEM "&Load Game",                  ID_FILE_LOADGAME
+        MENUITEM "&Save Game",                  ID_FILE_SAVEGAME
+        MENUITEM SEPARATOR
+        MENUITEM "&Move Now \t(m)",             ID_GAME_MOVENOW
+        MENUITEM SEPARATOR
+        MENUITEM "E&xit",                       ID_FILE_EXIT
+    END
+    POPUP "&Edit"
+    BEGIN
+        MENUITEM "Position &Edit",              ID_EDIT_SETUPBOARD
+        MENUITEM SEPARATOR
+        MENUITEM "&Copy Position to clipboard\t(c)", ID_EDIT_COPY_POS
+        MENUITEM "&Paste Position from clipboard\t(v)", ID_EDIT_PASTE_POS
+        MENUITEM SEPARATOR
+        MENUITEM "Copy Transcript to clipboard\t(ctrl+c)", ID_EDIT_COPY_TRANSCRIPT
+        MENUITEM "Paste Transcript from clipboard\t(ctrl+v)", ID_EDIT_PASTE_TRANSCRIPT
+    END
+    POPUP "&Level"
+    BEGIN
+        MENUITEM "&2-ply",                      ID_OPTIONS_BEGINNER
+        MENUITEM "&8-ply",                      ID_OPTIONS_NORMAL
+        MENUITEM "&Full Strength",              ID_OPTIONS_EXPERT
+        MENUITEM SEPARATOR
+        MENUITEM "&User-defined level",         ID_OPTIONS_CUSTOMLEVEL
+        MENUITEM SEPARATOR
+        MENUITEM "1 Sec/move",                  ID_OPTIONS_1SECOND
+        MENUITEM "2 Sec/move",                  ID_OPTIONS_2SECONDS
+        MENUITEM "5 Sec/move",                  ID_OPTIONS_5SECONDS
+        MENUITEM "10 Sec/move",                 ID_OPTIONS_10SECONDS
+        MENUITEM "30 Sec/Move",                 ID_OPTIONS_30SECONDS
+    END
+    POPUP "&Options"
+    BEGIN
+        MENUITEM "Flip Board",                  ID_GAME_FLIPBOARD
+        MENUITEM SEPARATOR
+        MENUITEM "Hashing",                     ID_GAME_HASHING
+        MENUITEM "Clear Hash\t(h)",             ID_GAME_CLEAR_HASH
+        MENUITEM SEPARATOR
+        MENUITEM "Computer &Off",               ID_GAME_COMPUTEROFF
+        MENUITEM "Computer Black",              ID_OPTIONS_COMPUTERBLACK
+        MENUITEM "Computer White",              ID_OPTIONS_COMPUTERWHITE
+    END
+    POPUP "&Developer"
+    BEGIN
+        MENUITEM SEPARATOR
+    END
+END
+
+THINKINGMENU MENU
+BEGIN
+    POPUP "&Game"
+    BEGIN
+        MENUITEM SEPARATOR
+    END
+    POPUP "&Edit"
+    BEGIN
+        MENUITEM "&Copy Position to clipboard",      ID_EDIT_COPY_POS
+        MENUITEM SEPARATOR
+        MENUITEM "Copy Transcript to clipboard",       ID_EDIT_COPY_TRANSCRIPT
+    END
+    POPUP "&Level"
+    BEGIN
+        MENUITEM "&Beginner",                   ID_OPTIONS_BEGINNER
+        MENUITEM "&Advanced",                   ID_OPTIONS_NORMAL
+        MENUITEM "&Expert",                     ID_OPTIONS_EXPERT
+        MENUITEM SEPARATOR
+        MENUITEM "&User-defined level",         ID_OPTIONS_CUSTOMLEVEL
+        MENUITEM SEPARATOR
+        MENUITEM "2 Sec/move",                  ID_OPTIONS_2SECONDS
+        MENUITEM "5 Sec/move",                  ID_OPTIONS_5SECONDS
+        MENUITEM "10 Sec/move",                 ID_OPTIONS_10SECONDS
+        MENUITEM "30 Sec/Move",                 ID_OPTIONS_30SECONDS
+    END
+    POPUP "&Options"
+    BEGIN
+        MENUITEM "Flip Board",                  ID_GAME_FLIPBOARD
+    END
+END
+
+
+/////////////////////////////////////////////////////////////////////////////
+//
+// Bitmap
+//
+
+WSQUARE                 BITMAP                  "../imgs/Wsquare.bmp"
+
+BSQUARE                 BITMAP                  "../imgs/Bsquare.bmp"
+
+RCHECK                  BITMAP                  "../imgs/Rcheck.bmp"
+
+WCHECK                  BITMAP                  "../imgs/Wcheck.bmp"
+
+WKING                   BITMAP                  "../imgs/Wking.bmp"
+
+RKING                   BITMAP                  "../imgs/Rking.bmp"
+
+
+/////////////////////////////////////////////////////////////////////////////
+//
+// Dialog
+//
+
+BOTWND DIALOGEX 0, 0, 459, 56
+STYLE DS_SETFONT | WS_CHILD | WS_VISIBLE
+FONT 8, "MS Sans Serif", 0, 0, 0x1
+BEGIN
+    LTEXT           "",150,7,2,246,51
+    PUSHBUTTON      "<|",IDC_START,255,18,19,14
+    PUSHBUTTON      "|>",IDC_END,326,18,19,14
+    PUSHBUTTON      "<",IDC_PREV,276,18,23,14
+    PUSHBUTTON      ">",IDC_NEXT,301,18,23,14
+    PUSHBUTTON      "GO",IDC_GO,255,2,40,14
+    PUSHBUTTON      "Retract",IDC_TAKEBACK,299,2,46,14
+END
+
+LEVELWND DIALOGEX 0, 0, 180, 69
+STYLE DS_SETFONT | DS_MODALFRAME | DS_FIXEDSYS | WS_POPUP | WS_CAPTION | WS_SYSMENU
+CAPTION "User-Defined Level"
+FONT 8, "MS Shell Dlg", 400, 0, 0x1
+BEGIN
+    DEFPUSHBUTTON   "OK",IDOK,7,49,50,14
+    PUSHBUTTON      "Cancel",IDCANCEL,123,49,50,14
+    EDITTEXT        IDC_DEPTH,97,3,76,14,ES_AUTOHSCROLL
+    EDITTEXT        IDC_TIME,97,23,76,14,ES_AUTOHSCROLL
+    LTEXT           "Max Depth :",IDC_DEPTH_TEXT,17,8,63,8
+    LTEXT           "Max Seconds/Move :",IDC_TIME_TEXT,17,27,68,8
+END
+
+
+/////////////////////////////////////////////////////////////////////////////
+//
+// DESIGNINFO
+//
+
+#ifdef APSTUDIO_INVOKED
+GUIDELINES DESIGNINFO
+BEGIN
+    "BOTWND", DIALOG
+    BEGIN
+        LEFTMARGIN, 7
+        RIGHTMARGIN, 453
+        TOPMARGIN, 2
+        BOTTOMMARGIN, 53
+    END
+
+    "LEVELWND", DIALOG
+    BEGIN
+        LEFTMARGIN, 7
+        RIGHTMARGIN, 173
+        TOPMARGIN, 3
+        BOTTOMMARGIN, 63
+    END
+END
+#endif    // APSTUDIO_INVOKED
+
+
+/////////////////////////////////////////////////////////////////////////////
+//
+// Icon
+//
+
+// Icon with lowest ID value placed first to ensure application icon
+// remains consistent on all systems.
+CHICON                  ICON                    "../imgs/checkers.ico"
+
+
+/////////////////////////////////////////////////////////////////////////////
+//
+// AFX_DIALOG_LAYOUT
+//
+
+BOTWND AFX_DIALOG_LAYOUT
+BEGIN
+    0
+END
+
+#endif    // English (United States) resources
+/////////////////////////////////////////////////////////////////////////////
+
+
+
+#ifndef APSTUDIO_INVOKED
+/////////////////////////////////////////////////////////////////////////////
+//
+// Generated from the TEXTINCLUDE 3 resource.
+//
+
+
+/////////////////////////////////////////////////////////////////////////////
+#endif    // not APSTUDIO_INVOKED
+
