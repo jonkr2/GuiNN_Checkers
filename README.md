@@ -7,3 +7,4 @@ For more information visit www.3dkingdoms.com/checkers.htm
 Platform : 64-bit Windows. (Can compile from source to 32-bit also.)
 
 Note : While I expect I may update this repo at some point, I consider this an unsupported release.
+GuiNN 2.06 includes changes by Ed Gilbert for 2.05
